@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<!--
+  Kohler D2C Performance Tracker — Standalone / External Deployment Version
+  =========================================================================
+  This file is self-contained and runs outside Claude.
+  Data is fetched directly from Windsor.ai's REST API.
+
+  SETUP (one-time):
+  1. Get your Windsor.ai API key: https://app.windsor.ai → Settings → API
+  2. Paste it into CONFIG.WINDSOR_API_KEY below.
+  3. Open this file in any browser — no server required for basic use.
+
+  CORS NOTE:
+  Windsor.ai sends CORS headers, so direct browser fetches usually work.
+  If you hit CORS errors (common when opening as file:// on some browsers),
+  serve the file via a local server:
+    npx serve .   OR   python -m http.server 8080
+  Then open http://localhost:8080/Kohler_D2C_Tracker_Standalone.html
+
+  SHARING WITH THE TEAM:
+  Host on any static host (Netlify, GitHub Pages, S3, internal server).
+  The API key is embedded in the file — use a backend proxy if you need
+  to keep it private.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler LeadGen Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root{color-scheme:light;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f1f5;color:#1A1A2E;font-size:12px;}
+
+/* ── Header ── */
+.hdr{background:#000;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:50;}
+.hdr-l{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.redbar{width:4px;height:26px;background:#CC0000;border-radius:2px;flex-shrink:0;}
+.hdr-sub{font-size:10px;color:#8a93b2;margin-top:1px;}
+.hdr-r{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.range-pills{display:flex;gap:4px;flex-wrap:wrap;}
+.rpill{background:#2a2d45;color:#aab;border:1px solid #3a3f60;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:.15s;white-space:nowrap;}
+.rpill.active,.rpill:hover{background:#CC0000;color:#fff;border-color:#CC0000;}
+.range-select{background:#2a2d45;color:#fff;border:none;padding:6px 17px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;height:34px;min-width:140px;}
+.range-select option{background:#1A1A2E;color:#fff;}
+.custom-dates{display:flex;align-items:center;gap:4px;}
+.custom-dates input{background:#2a2d45;border:1px solid #3a3f60;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;}
+.custom-dates input::-webkit-calendar-picker-indicator{filter:invert(1);}
+.btn{background:#CC0000;color:#fff;border:none;padding:6px 17px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;height:34px;}
+.btn:hover{background:#aa0000;}
+.btn:disabled{background:#555;cursor:not-allowed;}
+
+/* ── Loader ── */
+.loading{position:fixed;inset:0;background:rgba(240,241,245,.9);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:10px;}
+.spinner{width:28px;height:28px;border:3px solid #ddd;border-top-color:#CC0000;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#555;font-size:12px;}
+.hidden{display:none!important;}
+
+/* ── Tab bar ── */
+.tabs-bar{background:#fff;border-bottom:2px solid #eee;display:flex;justify-content:center;padding:0 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;position:sticky;top:57px;z-index:40;}
+.tabs-bar::-webkit-scrollbar{display:none;}
+.tbbtn{padding:10px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap;flex-shrink:0;}
+.tbbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;}
+.sale-tab-btn{color:#CC0000;}
+
+/* ── Sale event styles ── */
+.sale-pill{font-weight:800!important;}
+.sale-pill.mega{color:#CC0000!important;border-color:#CC0000!important;}
+.sale-pill.mini{color:#E07B00!important;border-color:#E07B00!important;}
+.sale-pill.mega.active{background:#fff0f0!important;color:#CC0000!important;}
+.sale-pill.mini.active{background:#fff8ee!important;color:#E07B00!important;}
+.sale-notice{background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px 16px;font-size:11px;color:#7a5c00;margin-bottom:14px;}
+.sale-events-grid{display:grid;grid-template-columns:1fr;gap:14px;}
+.sale-card{background:#fff;border-radius:10px;border:1px solid #e8e8e8;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.06);}
+.sale-card-hdr{display:flex;align-items:center;gap:12px;padding:12px 16px;}
+.mega-hdr{background:linear-gradient(90deg,#fff5f5,#fff);}
+.mini-hdr{background:linear-gradient(90deg,#fffaf0,#fff);}
+.sale-emoji{font-size:28px;line-height:1;}
+.sale-title{font-size:15px;font-weight:900;color:#1A1A2E;}
+.sale-dates{font-size:10px;color:#888;margin-top:2px;}
+.sale-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#f0f0f0;border-top:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;}
+.sale-kpi{background:#fff;padding:10px 12px;text-align:center;}
+.sale-kpi .kl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;}
+.sale-kpi .kv{font-size:15px;font-weight:800;color:#1A1A2E;margin-top:2px;}
+.sale-table-wrap{overflow-x:auto;}
+.sale-table{width:100%;border-collapse:collapse;font-size:11px;}
+.sale-table th{background:#f8f8f8;padding:7px 10px;text-align:right;font-size:9px;color:#888;font-weight:700;white-space:nowrap;border-bottom:1px solid #eee;}
+.sale-table th:first-child{text-align:left;}
+.sale-table td{padding:7px 10px;text-align:right;border-bottom:1px solid #f5f5f5;white-space:nowrap;}
+.sale-table td:first-child{text-align:left;font-weight:700;}
+.sale-table tr.total-row td{background:#f8f8f8;font-weight:800;border-top:2px solid #e8e8e8;}
+.sale-table tr.avg-row td{background:#fffdf5;font-size:10px;color:#888;font-style:italic;}
+.sale-month-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.sale-month-lbl{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-right:4px;}
+.smpill{padding:4px 12px;border-radius:20px;border:1.5px solid #ddd;background:#fff;color:#666;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.smpill.active{background:#1A1A2E;color:#fff;border-color:#1A1A2E;}
+.smpill:hover:not(.active){border-color:#999;color:#333;}
+.sale-nosale{padding:28px 16px;text-align:center;color:#bbb;font-size:12px;font-style:italic;}
+.sale-dod-hdr{padding:8px 14px 4px;font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.6px;border-top:1px solid #f0f0f0;background:#fafafa;}
+.sale-dod-table th,.sale-dod-table td{padding:6px 9px;font-size:10px;}
+.sale-dod-table tr:last-child td{border-bottom:none;}
+
+/* ── Tab content ── */
+.tab{display:none;padding:14px 18px 24px;}
+.tab.active{display:block;}
+
+/* ── Summary strip ── */
+.sstrip{display:grid;gap:8px;margin-bottom:14px;}
+.scard{background:#fff;border-radius:8px;padding:17px 13px;border-top:3px solid #e0e0e0;box-shadow:0 1px 4px rgba(0,0,0,.06);transition:.15s;text-align:center;}
+.scard:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);}
+.scard.all{border-top-color:#1A1A2E;}
+.scard .lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.scard .val{font-size:24px;font-weight:800;color:#1A1A2E;line-height:1;}
+.scard .sub{display:none;}
+.scard .sub b{color:#666;}
+
+/* ── Platform panels ── */
+.ppanels{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;margin-top:6px;}
+.ppanel{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.ppanel-hdr{padding:9px 14px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;letter-spacing:.3px;}
+.ppanel-hdr.meta-h{background:#1877F2;color:#fff;}
+.ppanel-hdr.goog-h{background:#34A853;color:#fff;}
+.ppanel-hdr.bing-h{background:#D4A017;color:#fff;}
+.ppanel-hdr.aff-h{background:#7B5EA7;color:#fff;}
+.ppanel-body{padding:12px 14px;}
+
+/* ── KPI grid ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
+.kpi-box{background:#f0f2f8;border-radius:6px;padding:8px 6px;text-align:center;border-bottom:2px solid #1A1A2E;}
+.kpi-box.kpi-primary{background:#f0f2f8;}
+.kl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;}
+.kv{font-size:18px;font-weight:800;color:#1A1A2E;line-height:1.1;}
+.kv-sm{font-size:14px;}
+
+/* ── Funnel ── */
+.funnel{display:flex;align-items:center;gap:4px;padding:8px 0;border-top:1px solid #f0f0f0;}
+.fstep{flex:1;text-align:center;min-width:44px;}
+.fstep .fn{font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.4px;}
+.fstep .fv{font-size:13px;font-weight:700;color:#1A1A2E;margin-top:2px;}
+.farr{color:#ddd;font-size:14px;flex-shrink:0;}
+
+/* ── Chart ── */
+.chart-card{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.chart-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;}
+.chart-hdr h3{font-size:11px;font-weight:700;}
+.cleg{display:flex;gap:10px;flex-wrap:wrap;}
+.cleg-i{display:flex;align-items:center;gap:4px;font-size:10px;color:#666;}
+.cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.plt-tog{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;border:1.5px solid var(--c);background:transparent;color:#666;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;opacity:.45;}
+.plt-tog.active{background:color-mix(in srgb,var(--c) 12%,transparent);color:#1A1A2E;opacity:1;}
+.plt-tog:hover{opacity:.85;}
+canvas{max-height:160px;}
+
+/* ── Tables ── */
+.table-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.ttabs{display:flex;border-bottom:1px solid #eee;background:#fafafa;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.ttabs::-webkit-scrollbar{display:none;}
+.ttbtn{padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap;flex-shrink:0;}
+.ttbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;background:#fff;}
+.tcontent{display:none;}
+.tcontent.active{display:block;}
+.twrap{overflow-x:auto;max-height:400px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{position:sticky;top:0;background:#f5f6fa;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:right;font-weight:700;border-bottom:1px solid #eaeaea;white-space:nowrap;z-index:2;}
+th:first-child{text-align:left;min-width:110px;position:sticky;top:0;left:0;z-index:4;background:#f5f6fa;}
+td{padding:5px 9px;text-align:right;border-bottom:1px solid #f5f5f5;color:#444;white-space:nowrap;}
+td:first-child{position:sticky;left:0;z-index:1;background:#fff;text-align:left;color:#1A1A2E;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;}
+tr:hover td{background:#f8f9ff;}
+tr:hover td:first-child{background:#f8f9ff;}
+.red{color:#CC0000!important;font-weight:700;}
+.grn{color:#34A853!important;font-weight:700;}
+.mst{color:#C8860B!important;font-weight:700;}
+.badge{display:inline-block;padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;margin-right:3px;vertical-align:middle;}
+.b-pmax{background:#f3e8ff;color:#7c3aed;}
+.b-shop{background:#fff0f0;color:#CC0000;}
+.b-srch{background:#e8f4fd;color:#0284c7;}
+.b-dgen{background:#fce7f3;color:#db2777;}
+.b-pros{background:#e8f4fd;color:#1877F2;}
+.b-look{background:#f0faf0;color:#34A853;}
+.b-rema{background:#fff8e1;color:#e08a00;}
+.b-oth{background:#f0f0f0;color:#666;}
+
+/* ── Weekly ── */
+.wsub{display:flex;border-bottom:1px solid #eee;padding:0 14px;background:#fafafa;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.wsub::-webkit-scrollbar{display:none;}
+.wsb{padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap;}
+.wsb.active{color:#1A1A2E;border-bottom-color:#1877F2;background:#fff;}
+.wcontent{display:none;padding:0;}
+.wcontent.active{display:block;}
+.stitle{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.empty{padding:24px;text-align:center;color:#aaa;font-size:12px;}
+.api-warning{background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#856404;}
+
+/* ── Insights ── */
+.insights-block{margin:0;}
+.insights-hdr{font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.insights-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.ins{background:#fff;border-radius:8px;padding:10px 12px;flex:1 1 250px;border-left:3px solid #ddd;font-size:11px;line-height:1.5;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.ins.signal{border-left-color:#2ecc71;background:#f6fdf7;}
+.ins.watch{border-left-color:#f39c12;background:#fffaf2;}
+.ins.action{border-left-color:#e74c3c;background:#fff5f5;}
+.ins.opp{border-left-color:#3498db;background:#f4f8ff;}
+.ins-tag{display:inline-block;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:1px 5px;border-radius:2px;margin-bottom:5px;}
+.signal .ins-tag{background:#d4f0db;color:#1a7a3a;}
+.watch .ins-tag{background:#fde8c8;color:#964d00;}
+.action .ins-tag{background:#ffd4d4;color:#990000;}
+.opp .ins-tag{background:#d4e8ff;color:#0055cc;}
+.ins-title{font-size:11px;font-weight:700;color:#1A1A2E;margin-bottom:3px;line-height:1.3;}
+.ins-body{font-size:10px;color:#555;line-height:1.5;margin-bottom:5px;}
+.ins-body b{color:#1A1A2E;}
+.ins-action{margin-top:5px;font-size:10px;font-weight:700;color:#333;padding-top:5px;border-top:1px solid rgba(0,0,0,.06);}
+.ins-empty{font-size:11px;color:#bbb;font-style:italic;padding:8px 0;}
+
+/* ── Panel type filters ── */
+.panel-filters{display:flex;gap:4px;padding:7px 14px 5px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;align-items:center;}
+.pfpill{padding:2px 9px;border-radius:10px;border:1.5px solid #ddd;background:#fff;color:#888;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;min-height:22px;}
+.pfpill.active{background:#1A1A2E;color:#fff;border-color:#1A1A2E;}
+.pfpill:hover:not(.active){border-color:#aaa;color:#444;}
+.pf-lbl{font-size:9px;color:#bbb;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-right:2px;}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE — Tablet / narrow panel (≤ 900px)
+   ══════════════════════════════════════════════ */
+@media(max-width:900px){
+  .sale-events-grid{grid-template-columns:1fr;}
+  .ppanels{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:repeat(4,1fr);}
+}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE — Mobile (≤ 640px)
+   ══════════════════════════════════════════════ */
+@media(max-width:640px){
+  /* Header */
+  .hdr{flex-direction:column;align-items:center;padding:10px 12px;gap:6px;position:relative;}
+  .hdr-sub{display:none;}
+  /* On mobile, hide the absolute-positioned title and show it inline */
+  .hdr > div[style*="position:absolute"]{position:static!important;transform:none!important;left:auto!important;}
+  /* Row 1: logo + title side by side, centered */
+  .hdr-l{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;}
+  /* Rows 2-4: dropdowns side by side, button full width */
+  .hdr-r{width:100%;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:8px;}
+  #channelSelect,#rangeSelect{flex:1 1 calc(50% - 4px);min-width:0;}
+  #refreshBtn{flex:0 0 100%;}
+  .range-select{width:100%;padding:10px 14px;font-size:12px;min-height:42px;height:42px;border-radius:4px;box-sizing:border-box;text-align:center;text-align-last:center;}
+  .range-pills{gap:4px;}
+  .rpill{padding:5px 10px;font-size:10px;min-height:32px;}
+  .custom-dates{width:100%;gap:6px;}
+  .custom-dates input{flex:1;min-width:0;font-size:11px;padding:5px 8px;}
+  .btn{width:100%;padding:10px 14px;font-size:12px;min-height:42px;height:42px;box-sizing:border-box;text-align:center;}
+
+  /* Tabs */
+  .tabs-bar{padding:0 6px;top:auto;}
+  .tbbtn{padding:9px 10px;font-size:10px;}
+
+  /* Tab content */
+  .tab{padding:10px 8px 20px;}
+
+  /* Summary — 2 per row, compact */
+  .sstrip{grid-template-columns:repeat(2,1fr)!important;gap:6px;margin-bottom:10px;}
+  .scard{padding:20px 10px;border-radius:7px;}
+  .scard .lbl{font-size:8px;}
+  .scard .val{font-size:20px;}
+  .scard .sub{display:none;}
+
+  /* Platform panels — stack */
+  .ppanels{grid-template-columns:1fr;gap:8px;margin-top:4px;}
+  .ppanel-body{padding:10px 10px;}
+  .ppanel-hdr{justify-content:center;}
+  .panel-filters{justify-content:center;}
+
+  /* KPI grid — 2 cols */
+  .kpi-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px;}
+  .kv{font-size:15px;}
+  .kv-sm{font-size:13px;}
+
+  /* Funnel — compact, no arrows */
+  .funnel{flex-wrap:wrap;gap:4px;justify-content:space-around;padding:8px 0;}
+  .fstep{flex:0 0 calc(33.33% - 4px);min-width:0;}
+  .farr{display:none;}
+  .fstep .fn{font-size:8px;}
+  .fstep .fv{font-size:12px;}
+
+  /* Chart */
+  .chart-card{padding:10px;}
+  .chart-hdr{flex-direction:column;align-items:center;gap:6px;}
+  .chart-hdr .range-pills{justify-content:center;}
+  canvas{max-height:200px;}
+
+  /* Tables */
+  .twrap{max-height:340px;}
+  .ttbtn{padding:7px 10px;font-size:10px;}
+
+  /* Insights — full-width stacked */
+  .insights-grid{display:block;}
+  .ins{flex:none;width:100%;margin-bottom:6px;border-radius:6px;}
+  .ins:last-child{margin-bottom:0;}
+
+  /* Sale events */
+  .sale-events-grid{grid-template-columns:1fr;}
+  .sale-kpi .kv{font-size:13px;}
+  .sale-month-bar{gap:4px;}
+
+  /* Misc */
+  .stitle{font-size:10px;}
+}
+
+/* ══════════════════════════════════════════════
+   RESPONSIVE — Small phones (≤ 400px)
+   ══════════════════════════════════════════════ */
+@media(max-width:400px){
+  .hdr-l svg{width:70px;height:22px;}
+  .sstrip{grid-template-columns:1fr 1fr!important;gap:5px;}
+  .scard .val{font-size:18px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
+  .kv{font-size:13px;}
+  .sale-kpis{grid-template-columns:repeat(2,1fr);}
+  .tbbtn{padding:8px 8px;font-size:9px;}
+}
+
+/* ═══ LEAD GEN DASHBOARD ═══ */
+.lg-tab{display:inline-flex;}
+/* #lg-overview moved to .tab.hidden pattern */
+.lg-content{max-width:1600px;margin:0 auto;padding:0;}
+.lg-kpi-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:0 0 12px 0;}
+.lg-kpi{background:#fff;border-radius:8px;padding:14px 10px;text-align:center;border-top:3px solid #E84393;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.lg-kpi .lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.lg-kpi .val{font-size:22px;font-weight:800;color:#1A1A2E;line-height:1;}
+.lg-kpi.lg-kpi-ph{border-top-color:#ccc;opacity:.65;}
+.lg-kpi.lg-kpi-ph .val{color:#bbb;font-size:13px;font-weight:600;}
+.lg-platform-panel{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin:12px 0;overflow:hidden;}
+.lg-platform-hdr{background:#1A1A2E;color:#fff;padding:9px 14px;font-size:11px;font-weight:700;letter-spacing:.3px;}
+.lg-section-hdr{color:#E84393;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 6px;}
+@media(max-width:640px){
+  .lg-kpi-strip{grid-template-columns:repeat(3,1fr);}
+  .lg-kpi .val{font-size:17px;}
+}
+@media(max-width:400px){.lg-kpi-strip{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<script>
+const CONFIG = {
+  // Windsor.ai REST API key
+  // Get it from: https://app.windsor.ai → Settings → API Keys
+  WINDSOR_API_KEY: 'REPLACE_WITH_WINDSOR_API_KEY',
+
+  // Windsor.ai API base URL
+  WINDSOR_API_BASE: 'https://connectors.windsor.ai',
+
+  // Meta Ads account
+  META_ACCOUNT: '1542147597124356',
+
+  // Google Ads account (Windsor MCP requires dashes format)
+  GOOGLE_ADS_ACCOUNT: '924-290-7329',
+  BING_ACCOUNT: '187198169',  // Kohler - SB
+
+  // Google Sheet tab IDs keyed by YYYY-MM — only months in the selected range are fetched
+  SHEET_ACCOUNTS_BY_MONTH: {
+    '2026-01': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-0',
+    '2026-02': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-1557025122',
+    '2026-03': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-959477246',
+    '2026-04': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-810876823',
+    '2026-05': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-1538906022',
+    '2026-06': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-122370696',
+  },
+  // Flat list kept for backward compat (Sale Events tab cache)
+  get SHEET_ACCOUNTS() { return Object.values(this.SHEET_ACCOUNTS_BY_MONTH); },
+
+  // Manual Google Ads conversion overrides (tracking misconfiguration)
+  // Key: YYYY-MM-DD, Value: actual conversion count
+  CONV_OVERRIDES: {
+    '2026-06-05': 16,
+    '2026-06-06': 41,
+  },
+};
+</script>
+
+<div class="loading hidden" id="loader">
+  <div class="spinner"></div>
+  <p id="loaderMsg">Fetching LeadGen data…</p>
+</div>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <svg width="90" height="28" viewBox="0 0 90 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+      <rect width="90" height="28" rx="2" fill="#000"/>
+      <text x="45" y="20" text-anchor="middle" font-family="'Arial Black','Arial',sans-serif" font-weight="900" font-size="15" letter-spacing="3" fill="#fff">KOHLER</text>
+    </svg>
+  </div>
+  <div style="position:absolute;left:50%;transform:translateX(-50%);">
+    <span style="font-size:21px;font-weight:700;color:#fff;white-space:nowrap;letter-spacing:.5px;">LEADGEN TRACKER</span>
+  </div>
+  <div class="hdr-r">
+    <select id="rangeSelect" class="range-select" onchange="setRangeFromSelect(this.value)">
+      <option value="today">Today</option>
+      <option value="yesterday" selected>Yesterday</option>
+      <option value="7d">Last 7 Days</option>
+      <option value="14d">Last 14 Days</option>
+      <option value="30d">Last 30 Days</option>
+      <option value="this-month">This Month</option>
+      <option value="last-month">Last Month</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <div class="custom-dates" id="customDates" style="display:none;">
+      <input type="date" id="d1"> <span style="color:#aaa;font-size:10px;">–</span> <input type="date" id="d2">
+    </div>
+    <button class="btn" id="refreshBtn" onclick="load()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tbbtn lg-tab active" onclick="switchLgOverview()">Overview</button>
+  <button class="tbbtn lg-tab" onclick="switchLgTab('tab-lg-day')">Day-on-Day</button>
+  <button class="tbbtn lg-tab" onclick="switchLgTab('tab-lg-region')">Region</button>
+  <button class="tbbtn lg-tab" onclick="switchLgTab('tab-lg-audience')">Audience</button>
+  <button class="tbbtn lg-tab" onclick="switchLgTab('tab-lg-creative')">Creative</button>
+  <button class="tbbtn lg-tab" onclick="switchLgTab('tab-lg-rxaud')">Region × Audience</button>
+</div>
+
+<!-- LEADGEN OVERVIEW TAB -->
+<div class="tab active" id="tab-lg-overview">
+  <!-- LeadGen KPI Strip -->
+  <div class="lg-kpi-strip">
+    <div class="lg-kpi"><div class="lbl">Spend</div><div class="val" id="lg_spend">—</div></div>
+    <div class="lg-kpi"><div class="lbl">Leads</div><div class="val" id="lg_leads">—</div></div>
+    <div class="lg-kpi"><div class="lbl">CPL</div><div class="val" id="lg_cpl">—</div></div>
+    <div class="lg-kpi lg-kpi-ph"><div class="lbl">QL</div><div class="val" id="lg_ql">Coming soon</div></div>
+    <div class="lg-kpi lg-kpi-ph"><div class="lbl">CPQL</div><div class="val" id="lg_cpql">Coming soon</div></div>
+    <div class="lg-kpi lg-kpi-ph"><div class="lbl">QL%</div><div class="val" id="lg_qlpct">Coming soon</div></div>
+  </div>
+
+  <!-- Daily Trend -->
+  <div class="chart-card">
+    <div class="chart-hdr">
+      <h3 id="lgChartTitle">Daily Trend</h3>
+      <div class="range-pills" style="gap:4px;flex-wrap:nowrap;">
+        <button class="rpill active" id="lgpill-spend" onclick="switchLgMetric('spend',this)">Spend</button>
+        <button class="rpill" id="lgpill-leads" onclick="switchLgMetric('leads',this)">Leads</button>
+        <button class="rpill" id="lgpill-cpl" onclick="switchLgMetric('cpl',this)">CPL</button>
+        <button class="rpill" id="lgpill-cvr" onclick="switchLgMetric('cvr',this)">Conv Rate</button>
+        <button class="rpill" id="lgpill-ql" onclick="switchLgMetric('ql',this)">QL</button>
+      </div>
+    </div>
+    <div style="position:relative;height:160px;width:100%;"><canvas id="lgTrendChart"></canvas></div>
+  </div>
+
+  <!-- Region Overview — Top 6 by QL + Top 6 by CPQL efficiency -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+
+    <!-- Top 6: Highest QL -->
+    <div class="chart-card" style="padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:13px;">Regions — by QL Volume</h3>
+        
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="border-bottom:2px solid #f0f0f0;">
+          <th style="text-align:left;padding:4px 4px;color:#888;font-weight:600;">Region</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Spend</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Leads</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">CPL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">QL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">FB</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Toilet</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">CPQL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">QL%</th>
+        </tr></thead>
+        <tbody id="lg_rg_top_ql_tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Top 6: Lowest CPQL -->
+    <div class="chart-card" style="padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:13px;">Regions — by CPQL Efficiency</h3>
+        
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="border-bottom:2px solid #f0f0f0;">
+          <th style="text-align:left;padding:4px 4px;color:#888;font-weight:600;">Region</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Spend</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Leads</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">CPL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">QL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">FB</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">Toilet</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">CPQL</th>
+          <th style="text-align:right;padding:4px 4px;color:#888;font-weight:600;">QL%</th>
+        </tr></thead>
+        <tbody id="lg_rg_top_cpql_tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div><!-- /tab-lg-overview -->
+
+
+<!-- LEADGEN ANALYSIS TABS -->
+<div class="tab hidden" id="tab-lg-day"><div class="lg-content">
+  <div class="table-card">
+    <div class="stitle" style="color:#E84393;">Day-on-Day Performance</div>
+    <div class="twrap"><table>
+      <thead><tr><th>Date</th><th>Spend</th><th>Impressions</th><th>Link Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Conv. Rate</th><th>QL</th><th>CPQL</th><th>QL%</th></tr></thead>
+      <tbody id="lg_day_tbody"></tbody>
+    </table></div>
+  </div>
+  </div><!-- /lg-content -->
+</div>
+
+<div class="tab hidden" id="tab-lg-region"><div class="lg-content">
+  <div class="table-card">
+    <div class="stitle" style="color:#E84393;">Region-wise Performance</div>
+    <div class="twrap"><table>
+      <thead><tr><th>Region</th><th>Spend</th><th>Impressions</th><th>Link Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Conv. Rate</th><th>Lead Share %</th><th>QL</th><th>CPQL</th></tr></thead>
+      <tbody id="lg_region_tbody"></tbody>
+    </table></div>
+  </div>
+  </div><!-- /lg-content -->
+</div>
+
+<div class="tab hidden" id="tab-lg-audience"><div class="lg-content">
+  <div class="table-card">
+    <div class="stitle" style="color:#E84393;">Audience-wise Performance</div>
+    <div class="twrap"><table>
+      <thead><tr><th>Audience Type</th><th>Spend</th><th>Impressions</th><th>Link Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Conv. Rate</th><th>Lead Share %</th><th>QL</th><th>CPQL</th></tr></thead>
+      <tbody id="lg_audience_tbody"></tbody>
+    </table></div>
+  </div>
+  </div><!-- /lg-content -->
+</div>
+
+<div class="tab hidden" id="tab-lg-creative"><div class="lg-content">
+  <div class="table-card">
+    <div class="stitle" style="color:#E84393;">Creative Performance</div>
+    <div class="twrap"><table>
+      <thead><tr><th>Creative Type</th><th>Spend</th><th>Impressions</th><th>Link Clicks</th><th>CTR</th><th>CPC</th><th>Leads</th><th>CPL</th><th>Conv. Rate</th></tr></thead>
+      <tbody id="lg_creative_tbody"></tbody>
+    </table></div>
+  </div>
+  <div class="table-card" style="margin-top:12px;">
+    <div class="stitle" style="color:#E84393;">Creative × Region</div>
+    <div class="twrap"><table>
+      <thead><tr><th>Creative</th><th>Region</th><th>Spend</th><th>Leads</th><th>CPL</th><th>CTR</th><th>Conv. Rate</th></tr></thead>
+      <tbody id="lg_creative_region_tbody"></tbody>
+    </table></div>
+  </div>
+  </div><!-- /lg-content -->
+</div>
+
+<div class="tab hidden" id="tab-lg-rxaud"><div class="lg-content">
+  <div class="table-card">
+    <div class="stitle" style="color:#E84393;">Region × Audience — CPL Matrix</div>
+    <div class="twrap" id="lg_rxaud_wrap"></div>
+  </div>
+  </div><!-- /lg-content -->
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA FETCHING — Windsor.ai REST API (direct fetch)
+// URL built manually — URLSearchParams encodes commas which breaks Windsor
+// ═══════════════════════════════════════════════════════════
+
+// ── Static QL data from disposition mapping (Jun 1–17, 2026) ──
+// Keys = Windsor/Meta enquiry date (= calling date - 1 day)
+// e.g. calling date Jun 2 QL=69 → leads received Jun 1 → key "2026-06-01"
+const STATIC_QL_BY_DATE = {"2026-06-01":70,"2026-06-02":68,"2026-06-03":56,"2026-06-04":94,"2026-06-05":46,"2026-06-06":50,"2026-06-07":21,"2026-06-08":57,"2026-06-09":71,"2026-06-10":71,"2026-06-11":52,"2026-06-12":51,"2026-06-13":70,"2026-06-14":48,"2026-06-15":83,"2026-06-16":84,"2026-06-17":71,"2026-06-18":72,"2026-06-19":47,"2026-06-20":39,"2026-06-21":6,"2026-06-22":57,"2026-06-23":67}; // keys = calling date; source: Digital Campaign Report 23-Jun-26
+const STATIC_QL_BY_ADSET = {"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_NCR_InstantForms_OTP_FullBathroom":1,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Kerala_InstantForms_OTP_FullBathroom":0,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_Karnataka_InstantForms_OTP_FullBathroom":3,"090126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_ROM2_InstantForms_OTP_FullBathroom":3,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_AP&TS_InstantForms_OTP_FullBathroom":3,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Rajasthan_InstantForms_OTP_FullBathroom":11,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_Kerala_InstantForms_OTP_FullBathroom":4,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_Kerala_InstantForms_OTP_FullBathroom":3,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_JOB_InstantForms_OTP_FullBathroom":1,"100626_Cheil_Kohler_LeadGen_Prospecting_Gujarat_InstantForms_OTP_Interests_FullBathroom":3,"070126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_Rajasthan_InstantForms_OTP_FullBathroom":9,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_ROM1_InstantForms_OTP_FullBathroom":2,"090126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_ROM1_InstantForms_OTP_FullBathroom":4,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Karnataka_InstantForms_OTP_FullBathroom":1,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_TN_InstantForms_OTP_FullBathroom":0,"090126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPWest&UK_InstantForms_OTP_FullBathroom":5,"090126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_NorthEast_InstantForms_OTP_FullBathroom":8,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_JOB_InstantForms_OTP_FullBathroom":10,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_PanIndia_InstantForms_OTP_FullBathroom":97,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_PanIndia_InstantForms_OTP_FullBathroom":68,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_WB_InstantForms_OTP_FullBathroom":0,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_AP&TS_InstantForms_OTP_FullBathroom":4,"160426_Cheil_Kohler_LeadGen_Prospecting_PanIndia_InstantForms_OTP_1%LAL_Convertors_Toilets":73,"170426_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Kerala_InstantForms_OTP_FullBathroom":4,"170426_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_NorthEast_InstantForms_OTP_FullBathroom":6,"070526_Cheil_Kohler_LeadGen_Prospecting_Adv+_Chandigarh_InstantForms_OTP_FullBathroom":0,"280526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_NorthEast_InstantForms_OTP_FullBathroom_QuestionForm":0,"280526_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_NorthEast_InstantForms_OTP_FullBathroom_Questionform":0,"050626_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPWest&UK_InstantForms_OTP_FullBathroom_ManualForm":0,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_mumbai_InstantForms_OTP_FullBathroom":2,"070126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_Kerala_InstantForms_OTP_FullBathroom":0,"260326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Karnataka_InstantForms_OTP_FullBathroom":3,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_ROM1_InstantForms_OTP_FullBathroom":2,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_ROM2_InstantForms_OTP_FullBathroom":5,"200526_Cheil_Kohler_LeadGen_Prospecting_AdvantagePlus_Kerala_InstantForms_OTP_FullBathroom_HighPriorityPinCodes":1,"280526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_NorthEast_InstantForms_OTP_FullBathroom_QuestionForm":1,"050626_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPNorth1_InstantForms_OTP_FullBathroom_ManualForm":1,"100626_Cheil_Kohler_LeadGen_Prospecting_Rajasthan_InstantForms_OTP_Interests_FullBathroom":5,"070126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Rajasthan_InstantForms_OTP_FullBathroom":6,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPNorth1_InstantForms_OTP_FullBathroom":5,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_mumbai_InstantForms_OTP_FullBathroom":1,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_JOB_InstantForms_OTP_FullBathroom":8,"080526_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_WB_InstantForms_OTP_FullBathroom":1,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_JOB_InstantForms_OTP_FullBathroom":1,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_JOB_InstantForms_OTP_FullBathroom":10,"100526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Kerala_InstantForms_OTP_FullBathroom_Vernacular":0,"050626_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPEast_InstantForms_OTP_FullBathroom_ManualForm":7,"050626_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPWest&UK_InstantForms_OTP_FullBathroom_ManualForm":1,"050626_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPWest&UK_InstantForms_OTP_FullBathroom_ManualForm":3,"280226_Cheil_Kohler_LeadGen_Prospecting_Interest_MPCG_InstantForms_OTP_FullBathroom":5,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_Gujarat_InstantForms_OTP_FullBathroom":5,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_NCR_InstantForms_OTP_FullBathroom":5,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_ROM2_InstantForms_OTP_FullBathroom":1,"210126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPEast_InstantForms_OTP_FullBathroom":10,"200126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPEast_InstantForms_OTP_FullBathroom":1,"070126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_WB_InstantForms_OTP_FullBathroom":5,"020326_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_TN_InstantForms_OTP_FullBathroom_Vernacular":1,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Gujarat_InstantForms_OTP_FullBathroom":0,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPEast_InstantForms_OTP_FullBathroom":0,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Kerala_InstantForms_OTP_FullBathroom":0,"160426_Cheil_Kohler_LeadGen_Prospecting_PanIndia_InstantForms_OTP_Adv+_Toilets":75,"180426_Cheil_Kohler_LeadGen_Prospecting_Interest_PanIndia_InstantForms_OTP_FullBathroom":0,"080526_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_WB_InstantForms_OTP_FullBathroom":7,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_WB_InstantForms_OTP_FullBathroom":4,"100526_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Kerala_InstantForms_OTP_FullBathroom_Vernacular":0,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_MPCG_InstantForms_OTP_FullBathroom":4,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Gujarat_InstantForms_OTP_FullBathroom":0,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPNorth2_InstantForms_OTP_FullBathroom":5,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_PanIndia_InstantForms_OTP_FullBathroom":118,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_mumbai_InstantForms_OTP_FullBathroom":1,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_NCR_InstantForms_OTP_FullBathroom":13,"160426_Cheil_Kohler_LeadGen_Prospecting_PanIndia_InstantForms_OTP_Interest_Toilets":35,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_WB_InstantForms_OTP_FullBathroom":1,"050626_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPEast_InstantForms_OTP_FullBathroom_ManualForm":0,"050626_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPNorth1_InstantForms_OTP_FullBathroom_ManualForm":1,"100626_Cheil_Kohler_LeadGen_Prospecting_Gujarat_InstantForms_OTP_AdvPlus_FullBathroom":1,"100626_Cheil_Kohler_LeadGen_Prospecting_Rajasthan_InstantForms_OTP_Lookalikes_FullBathroom":4,"190326_Cheil_Kohler_LeadGen_Prospecting_InterestAdv+_PanIndia_InstantForms_OTP_FullBathroom":129,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_NorthEast_InstantForms_OTP_FullBathroom":2,"160426_Cheil_Kohler_LeadGen_Prospecting_PanIndia_InstantForms_OTP_1%LAL_QL_Toilets":52,"070526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Chandigarh_InstantForms_OTP_FullBathroom":11,"100526_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_Kerala_InstantForms_OTP_FullBathroom_Vernacular":0,"280526_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_NorthEast_InstantForms_OTP_FullBathroom_QuestionForm":0,"280526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_NorthEast_InstantForms_OTP_FullBathroom_Questionform":1,"100626_Cheil_Kohler_LeadGen_Prospecting_Gujarat_InstantForms_OTP_Lookalikes_FullBathroom":4,"100626_Cheil_Kohler_LeadGen_Prospecting_NCR_InstantForms_OTP_Interests_FullBathroom":0,"100626_Cheil_Kohler_LeadGen_Prospecting_Rajasthan_InstantForms_OTP_AdvPlus_FullBathroom":4,"090126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPNorth2_InstantForms_OTP_FullBathroom":7,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_JOB_InstantForms_OTP_FullBathroom":2,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_MPCG_InstantForms_OTP_FullBathroom":6,"200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_TN_InstantForms_OTP_FullBathroom":1,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPWest&UK_InstantForms_OTP_FullBathroom":8,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_NorthEast_InstantForms_OTP_FullBathroom":6,"160426_Cheil_Kohler_LeadGen_Prospecting_PanIndia_InstantForms_OTP_1%LAL_KEC_Toilets":77,"100526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_QL_Kerala_InstantForms_OTP_FullBathroom_Vernacular":0,"050626_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPEast_InstantForms_OTP_FullBathroom_ManualForm":0,"050626_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPNorth1_InstantForms_OTP_FullBathroom_ManualForm":2,"100626_Cheil_Kohler_LeadGen_Prospecting_NCR_InstantForms_OTP_Lookalikes_FullBathroom":0,"100626_Cheil_Kohler_LeadGen_Prospecting_NCR_InstantForms_OTP_AdvPlus_FullBathroom":5,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_UPNorth1_InstantForms_OTP_FullBathroom":0,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_TN_InstantForms_OTP_FullBathroom":2,"090126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_UPWest&UK_InstantForms_OTP_FullBathroom":1,"080126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_AP&TS_InstantForms_OTP_FullBathroom":1,"080126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_WB_InstantForms_OTP_FullBathroom":1,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPNorth1_InstantForms_OTP_FullBathroom":1,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_UPNorth2_InstantForms_OTP_FullBathroom":4,"190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_NorthEast_InstantForms_OTP_FullBathroom":4,"070526_Cheil_Kohler_LeadGen_Prospecting_Interest_Chandigarh_InstantForms_OTP_FullBathroom":7,"080526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_WB_InstantForms_OTP_FullBathroom":4,"100526_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_Kerala_InstantForms_OTP_FullBathroom_Vernacular":1,"Website":32};
+const STATIC_QL_BY_REGION = {"PanIndia":951,"Rajasthan":42,"JOB":38,"NorthEast":35,"NCR":29,"WB":27,"UPEast":21,"UPNorth2":21,"UPWest&UK":21,"MPCG":18,"Chandigarh":18,"Gujarat":17,"Kerala":14,"UPNorth1":11,"ROM1":11,"ROM2":11,"Karnataka":10,"AP&TS":8,"TN":5,"mumbai":5}; // keyed by parseLgRegion output; source: Campaign Wise 23-Jun-26
+const STATIC_QL_BY_REGION_CAT = {"PanIndia":{"FullBathroom":584,"Toilet":367},"Rajasthan":{"FullBathroom":42},"JOB":{"FullBathroom":38},"NorthEast":{"FullBathroom":35},"NCR":{"FullBathroom":29},"WB":{"FullBathroom":27},"UPEast":{"FullBathroom":21},"UPNorth2":{"FullBathroom":21},"UPWest&UK":{"FullBathroom":21},"MPCG":{"FullBathroom":18},"Chandigarh":{"FullBathroom":18},"Gujarat":{"FullBathroom":17},"Kerala":{"FullBathroom":14},"UPNorth1":{"FullBathroom":11},"ROM1":{"FullBathroom":11},"ROM2":{"FullBathroom":11},"Karnataka":{"FullBathroom":10},"AP&TS":{"FullBathroom":8},"TN":{"FullBathroom":5},"mumbai":{"FullBathroom":5}};
+function qlForRegion(regionName) { return STATIC_QL_BY_REGION[regionName] || 0; }
+function qlCatForRegion(regionName, cat) { return (STATIC_QL_BY_REGION_CAT[regionName]||{})[cat] || 0; }
+
+function shiftDate(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function qlForDateRange(from, to) {
+  if (!from || !to) return 0;
+  // from/to are Windsor enquiry dates; STATIC_QL_BY_DATE is keyed by calling date (enquiry+1)
+  const d0 = new Date(shiftDate(from, 1) + 'T00:00:00');
+  const d1 = new Date(shiftDate(to, 1) + 'T00:00:00');
+  return Object.entries(STATIC_QL_BY_DATE).reduce((s, [dt, v]) => {
+    const d = new Date(dt + 'T00:00:00'); return (d >= d0 && d <= d1) ? s + v : s;
+  }, 0);
+}
+function qlForAdsets(adsetNames) {
+  return adsetNames.reduce((s, n) => s + (STATIC_QL_BY_ADSET[n] || 0), 0);
+}
+
+
+async function windsorFetch({ connector, accounts, fields, date_from, date_to }) {
+  let url = CONFIG.WINDSOR_API_BASE + '/' + connector + '?api_key=' + CONFIG.WINDSOR_API_KEY + '&fields=' + fields.join(',');
+  if (date_from) url += '&date_from=' + date_from;
+  if (date_to)   url += '&date_to='   + date_to;
+  (accounts || []).forEach(function(a){ url += '&account_id=' + encodeURIComponent(a); });
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Windsor ' + connector + ': HTTP ' + resp.status);
+  const json = await resp.json();
+  const rows = Array.isArray(json) ? json : (json.data || json.result || []);
+  if (!rows.length) console.warn('Windsor ' + connector + ': 0 rows returned');
+  return rows;
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// FORMATTERS
+// ═══════════════════════════════════════════════════════════
+let trendInst = null;
+const _ind = (n,d=0) => Math.abs(n)<0.005&&d>0?n.toFixed(d):n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const rs  = n => { if(n==null||isNaN(n))return'—'; return '₹'+_ind(Math.round(n)); };
+const rs2 = n => { if(n==null||isNaN(n))return'—'; return '₹'+_ind(n,2); };
+const rss = n => { if(n==null||isNaN(n))return'—'; return '₹'+_ind(Math.round(n)); };
+const num = (n,d=0) => { if(n==null||isNaN(n))return'—'; return _ind(+n.toFixed(d),d); };
+const pct = n=>{ if(n==null||isNaN(n)||n===0)return'—'; return(n*100).toFixed(2)+'%'; };
+const roas= n=>{ if(!n||n<=0)return'—'; return n.toFixed(2)+'x'; };
+const safe= n=>parseFloat(n)||0;
+const sum =(arr,k)=>arr.reduce((a,r)=>a+safe(r[k]),0);
+
+
+// ═══════════════════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════════════════
+function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+function isoDate(d){ return d.toISOString().split('T')[0]; }
+function localDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return localDate(d); }
+function getWeek(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1);
+  const mon=new Date(d.setDate(diff)), sun=new Date(mon);
+  sun.setDate(sun.getDate()+6);
+  return isoDate(mon)+' – '+fmtDate(isoDate(sun));
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI CONTROLS
+// ═══════════════════════════════════════════════════════════
+function applyRange(r) {
+  const d1=document.getElementById('d1'), d2=document.getElementById('d2');
+  const cd=document.getElementById('customDates');
+  if(r==='today'){ d1.value=isoDate(new Date()); d2.value=isoDate(new Date()); }
+  else if(r==='yesterday'){ d1.value=daysAgo(1); d2.value=daysAgo(1); }
+  else if(r==='7d'){ d1.value=daysAgo(7); d2.value=daysAgo(1); }
+  else if(r==='14d'){ d1.value=daysAgo(14); d2.value=daysAgo(1); }
+  else if(r==='30d'){ d1.value=daysAgo(30); d2.value=daysAgo(1); }
+  else if(r==='this-month'){ const t=new Date(); d1.value=localDate(new Date(t.getFullYear(),t.getMonth(),1)); d2.value=localDate(t); }
+  else if(r==='last-month'){ const t=new Date(); const f=new Date(t.getFullYear(),t.getMonth()-1,1); const l=new Date(t.getFullYear(),t.getMonth(),0); d1.value=localDate(f); d2.value=localDate(l); }
+  else if(r==='mega-sale'){ d1.value='2026-06-06'; d2.value='2026-06-15'; }
+  if(cd) cd.style.display = r==='custom' ? 'flex' : 'none';
+}
+function setRange(r) {
+  applyRange(r);
+  if(r!=='custom') load();
+}
+function setRangeFromSelect(r) {
+  applyRange(r);
+  const sel=document.getElementById('rangeSelect');
+  if(sel) sel.value=r;
+  if(r==='custom'){
+    const cd=document.getElementById('customDates');
+    if(cd) cd.style.display='flex';
+  } else {
+    load();
+  }
+}
+
+
+function parseLgAudience(adset) {
+  const n = adset || '';
+  if (/1%LAL_Convertors/i.test(n)) return 'LAL — Converters';
+  if (/1%LAL_KEC/i.test(n))        return 'LAL — KEC';
+  if (/1%LAL_QL/i.test(n))         return 'LAL — Quality Leads';
+  if (/AdvPlus|Adv\+/i.test(n))    return 'Advantage+';
+  if (/Interest/i.test(n))         return 'Interest & Beh';
+  return 'Other';
+}
+
+// Parse region from adset name
+function parseLgRegion(adset) {
+  const REGIONS = ['AP&TS','Gujarat','JOB','Karnataka','Kerala','MPCG','mumbai','Mumbai',
+    'NCR','NorthEast','PanIndia','Rajasthan','ROM1','ROM2','TN','UPEast',
+    'UPNorth1','UPNorth2','UPWest&UK','UPWest','WB','Chandigarh','TopCities'];
+  const n = adset || '';
+  for (const r of REGIONS) {
+    if (n.includes('_'+r+'_')) {
+      if (r === 'Mumbai') return 'mumbai';        // normalise casing
+      if (r === 'UPWest') return 'UPWest&UK';    // normalise short form
+      if (r === 'TopCities') return 'PanIndia';   // alias
+      return r;
+    }
+  }
+  return 'Unknown';
+}
+
+// Parse creative type from ad name
+function parseLgCreative(adname) {
+  const n = adname || '';
+  const m = n.match(/_(Carousel\d+|Static\d+|Video\d*|Reel\d*)/i);
+  return m ? m[1] : 'Other';
+}
+
+// Aggregate metrics for a set of rows
+function calcLg(rows) {
+  let spend=0, imps=0, clicks=0, leads=0;
+  rows.forEach(r => {
+    spend  += +(r.spend||0);
+    imps   += +(r.impressions||0);
+    clicks += +(r.actions_link_click||0);
+    leads  += +(r.actions_lead||0);
+  });
+  const ctr = imps   > 0 ? clicks/imps   : 0;
+  const cpc = clicks > 0 ? spend/clicks  : 0;
+  const cpl = leads  > 0 ? spend/leads   : 0;
+  const cvr = clicks > 0 ? leads/clicks  : 0;
+  return { spend, imps, clicks, leads, ctr, cpc, cpl, cvr };
+}
+
+// Color classes
+function cplClass(v) {
+  if (!v || v <= 0) return '';
+  return v < 150 ? 'grn' : v < 250 ? 'mst' : 'red';
+}
+function ctrLgClass(v) {
+  if (!v || v <= 0) return '';
+  return v >= 0.015 ? 'grn' : v >= 0.008 ? 'mst' : 'red';
+}
+
+// ── Overview KPI strip ──
+function renderLgOverview(rows, from, to) {
+  const m = calcLg(rows);
+  document.getElementById('lg_spend').textContent = rs(m.spend);
+  document.getElementById('lg_leads').textContent = num(m.leads, 0);
+  const cplEl = document.getElementById('lg_cpl');
+  cplEl.textContent = rs(m.cpl);
+  cplEl.className = 'val ' + cplClass(m.cpl);
+  // QL metrics from static disposition mapping
+  const ql   = qlForDateRange(from, to);
+  const cpql = ql > 0 ? m.spend / ql : 0;
+  const qlp  = m.leads > 0 ? ql / m.leads : 0;
+  const qlEl   = document.getElementById('lg_ql');
+  const cpqlEl = document.getElementById('lg_cpql');
+  const qlpEl  = document.getElementById('lg_qlpct');
+  if (qlEl)   { qlEl.textContent   = ql > 0 ? num(ql,0) : '—'; }
+  if (cpqlEl) { cpqlEl.textContent = ql > 0 ? rs(cpql)  : '—'; }
+  if (qlpEl)  { qlpEl.textContent  = ql > 0 ? pct(qlp)  : '—'; }
+  // Remove placeholder styling
+  [qlEl, cpqlEl, qlpEl].forEach(el => { if (el && el.parentElement) el.parentElement.classList.remove('lg-kpi-ph'); });
+}
+
+// ── Platform Split ──
+function renderLgPlatformSplit(rows) {
+  const m = calcLg(rows);
+  const tbody = document.getElementById('lg_platform_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr>
+    <td><b>Meta</b></td>
+    <td>${rs(m.spend)}</td>
+    <td>${num(m.leads,0)}</td>
+    <td class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+    <td class="${ctrLgClass(m.ctr)}">${pct(m.ctr)}</td>
+    <td>${rs2(m.cpc)}</td>
+    <td>${num(m.imps,0)}</td>
+    <td>${num(m.clicks,0)}</td>
+  </tr>`;
+}
+
+// ── Daily Trend Chart ──
+let lgChart = null;
+let lgCurrentMetric = 'spend';
+
+const LG_METRICS = {
+  spend: { lbl:'Daily Spend',     fmt: v => '₹'+Math.round(v).toLocaleString('en-IN'), color:'#CC0000' },
+  leads: { lbl:'Daily Leads',     fmt: v => Math.round(v).toLocaleString('en-IN'),      color:'#E84393' },
+  cpl:   { lbl:'Daily CPL',       fmt: v => '₹'+Math.round(v).toLocaleString('en-IN'), color:'#1A1A2E' },
+  cvr:   { lbl:'Daily Conv Rate', fmt: v => (v*100).toFixed(2)+'%',                    color:'#34A853' },
+  ql:    { lbl:'Daily QL',        fmt: v => Math.round(v).toLocaleString('en-IN'),      color:'#7C3AED' },
+};
+
+function _drawLgChart(data, metric) {
+  const ctx = document.getElementById('lgTrendChart');
+  if (!ctx) return;
+  if (lgChart) { lgChart.destroy(); lgChart = null; }
+  const cfg = LG_METRICS[metric];
+  const labels = data.map(d => { const dt=new Date(d.date+'T00:00:00'); return dt.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); });
+  const values = data.map(d => +(d[metric]||0).toFixed(4));
+  lgChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[{ label:cfg.lbl, data:values, borderColor:cfg.color, backgroundColor:cfg.color+'22',
+      pointRadius:3, pointBackgroundColor:cfg.color, fill:true, tension:0.3, borderWidth:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: ctx => cfg.fmt(ctx.parsed.y) } } },
+      scales:{ x:{ grid:{display:false}, ticks:{font:{size:9}} },
+               y:{ grid:{color:'#f0f0f0'}, ticks:{ font:{size:9}, callback: v => cfg.fmt(v) } } } }
+  });
+  const titleEl = document.getElementById('lgChartTitle');
+  if (titleEl) titleEl.textContent = cfg.lbl + ' Trend';
+}
+
+let _lgTrendData = [];
+function switchLgMetric(metric, btn) {
+  lgCurrentMetric = metric;
+  document.querySelectorAll('[id^="lgpill-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _drawLgChart(_lgTrendData, metric);
+}
+
+function _buildLgTrendData(rows) {
+  const byDate = {};
+  rows.forEach(r => {
+    const d = r.date; if (!d) return;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(r);
+  });
+  const dates = Object.keys(byDate).sort();
+  _lgTrendData = dates.map(d => { const m=calcLg(byDate[d]); const ql=STATIC_QL_BY_DATE[shiftDate(d,1)]||0; return {date:d,...m,ql}; });
+  _drawLgChart(_lgTrendData, lgCurrentMetric);
+}
+
+// ── Day-on-Day Table ──
+function renderLgDayTable(rows) {
+  const byDate = {};
+  rows.forEach(r => { const enqDate=r.date; if(!enqDate)return; const d=shiftDate(enqDate,1); if(!byDate[d])byDate[d]=[]; byDate[d].push(r); }); // d = calling date
+  const dates = Object.keys(byDate).sort().reverse();
+  const tbody = document.getElementById('lg_day_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = dates.map(d => {
+    const m = calcLg(byDate[d]);
+    const ql   = STATIC_QL_BY_DATE[d] || 0;
+    const cpql = ql > 0 ? m.spend / ql : 0;
+    const qlp  = m.leads > 0 ? ql / m.leads : 0;
+    return `<tr>
+      <td>${new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+      <td>${rs(m.spend)}</td><td>${num(m.imps,0)}</td><td>${num(m.clicks,0)}</td>
+      <td class="${ctrLgClass(m.ctr)}">${pct(m.ctr)}</td>
+      <td>${rs2(m.cpc)}</td>
+      <td><b>${num(m.leads,0)}</b></td>
+      <td class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+      <td>${pct(m.cvr)}</td>
+      <td><b>${ql > 0 ? num(ql,0) : '—'}</b></td>
+      <td>${ql > 0 ? rs(cpql) : '—'}</td>
+      <td>${ql > 0 ? pct(qlp) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Generic dimension table renderer (with lead share) ──
+function _lgDimTable(rows, keyFn, tbodyId) {
+  const map = {};
+  rows.forEach(r => {
+    const k = keyFn(r);
+    if (!map[k]) map[k] = [];
+    map[k].push(r);
+  });
+  const totalLeads = calcLg(rows).leads;
+  const sorted = Object.keys(map).sort((a,b) => calcLg(map[b]).leads - calcLg(map[a]).leads);
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = sorted.map(k => {
+    const m = calcLg(map[k]);
+    const share = totalLeads > 0 ? m.leads/totalLeads : 0;
+    const adsetNames = [...new Set(map[k].map(r => r.adset_name||''))]; // deduplicate across days
+    const ql   = qlForAdsets(adsetNames);
+    const cpql = ql > 0 ? m.spend / ql : 0;
+    return `<tr>
+      <td><b>${k}</b></td>
+      <td>${rs(m.spend)}</td><td>${num(m.imps,0)}</td><td>${num(m.clicks,0)}</td>
+      <td class="${ctrLgClass(m.ctr)}">${pct(m.ctr)}</td>
+      <td>${rs2(m.cpc)}</td>
+      <td><b>${num(m.leads,0)}</b></td>
+      <td class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+      <td>${pct(m.cvr)}</td>
+      <td>${pct(share)}</td>
+      <td><b>${ql > 0 ? num(ql,0) : '—'}</b></td>
+      <td>${ql > 0 ? rs(cpql) : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Region Table ──
+function renderLgRegionTable(rows, from, to) {
+  _lgDimTable(rows, r => parseLgRegion(r.adset_name||''), 'lg_region_tbody');
+  // build region metrics for overview panels
+  const map = {};
+  rows.forEach(r => { const k=parseLgRegion(r.adset_name||''); if(!map[k])map[k]=[]; map[k].push(r); });
+  // Scale region-level QL (from Campaign Wise direct mapping) to selected date range
+  const totalStaticQL = Object.values(STATIC_QL_BY_DATE).reduce((s,v)=>s+v,0);
+  const rangeQL = qlForDateRange(from, to);
+  const qlScale = totalStaticQL > 0 ? rangeQL / totalStaticQL : 0;
+
+  const regionStats = Object.keys(map)
+    .filter(k=>k&&k!=='Unknown')
+    .map(k => {
+      const m = calcLg(map[k]);
+      const ql = Math.round(qlForRegion(k) * qlScale);  // direct region lookup, scaled to date range
+      const fbQL = Math.round(qlCatForRegion(k,'FullBathroom') * qlScale);
+      const toiQL = Math.round(qlCatForRegion(k,'Toilet') * qlScale);
+      const cpql = ql>0 ? m.spend/ql : 999999;
+      const qlpct = ql>0 && m.leads>0 ? ql/m.leads : 0;
+      return {k, m, ql, fbQL, toiQL, cpql, qlpct};
+    });
+
+  function renderRegionRows(tbodyId, sortedAll, totSpend, totLeads, totQL, totFB, totToi) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    const rows = sortedAll.map(({k,m,ql,fbQL,toiQL,cpql,qlpct}) => `<tr style="border-bottom:1px solid #f5f5f5;">
+      <td style="padding:5px 4px;font-weight:600;">${k}</td>
+      <td style="padding:5px 4px;text-align:right;">${rs(m.spend)}</td>
+      <td style="padding:5px 4px;text-align:right;">${num(m.leads,0)}</td>
+      <td style="padding:5px 4px;text-align:right;" class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+      <td style="padding:5px 4px;text-align:right;font-weight:700;color:#7C3AED;">${ql>0?num(ql,0):'—'}</td>
+      <td style="padding:5px 4px;text-align:right;color:#34A853;">${fbQL>0?num(fbQL,0):'—'}</td>
+      <td style="padding:5px 4px;text-align:right;color:#1A1A2E;">${toiQL>0?num(toiQL,0):'—'}</td>
+      <td style="padding:5px 4px;text-align:right;font-weight:700;" class="${ql>0?(cpql<3000?'green':cpql<6000?'':'red'):''}">${ql>0?rs(cpql):'—'}</td>
+      <td style="padding:5px 4px;text-align:right;">${ql>0?pct(qlpct):'—'}</td>
+    </tr>`).join('');
+    // totals row
+    const tCPL  = totLeads>0 ? totSpend/totLeads : 0;
+    const tCPQL = totQL>0    ? totSpend/totQL    : 0;
+    const tQLpct= totQL>0 && totLeads>0 ? totQL/totLeads : 0;
+    const totRow = `<tr style="border-top:2px solid #ddd;background:#f9f9f9;">
+      <td style="padding:6px 4px;font-weight:700;">Total</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;">${rs(totSpend)}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;">${num(totLeads,0)}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;" class="${cplClass(tCPL)}">${rs(tCPL)}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;color:#7C3AED;">${totQL>0?num(totQL,0):'—'}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;color:#34A853;">${totFB>0?num(totFB,0):'—'}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;color:#1A1A2E;">${totToi>0?num(totToi,0):'—'}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;" class="${totQL>0?(tCPQL<3000?'green':tCPQL<6000?'':'red'):''}">${totQL>0?rs(tCPQL):'—'}</td>
+      <td style="padding:6px 4px;text-align:right;font-weight:700;">${totQL>0?pct(tQLpct):'—'}</td>
+    </tr>`;
+    tbody.innerHTML = rows + totRow;
+  }
+
+  // Totals across all regions
+  const totSpend = regionStats.reduce((s,r)=>s+r.m.spend,0);
+  const totLeads = regionStats.reduce((s,r)=>s+r.m.leads,0);
+  const totFB    = regionStats.reduce((s,r)=>s+r.fbQL,0);
+  const totToi   = regionStats.reduce((s,r)=>s+r.toiQL,0);
+
+  // All regions sorted by QL (highest volume first)
+  const byQL = [...regionStats].sort((a,b)=>b.ql-a.ql);
+  renderRegionRows('lg_rg_top_ql_tbody', byQL, totSpend, totLeads, rangeQL, totFB, totToi);
+
+  // All regions sorted by CPQL efficiency (lowest CPQL first)
+  const byCPQL = [...regionStats].sort((a,b)=>a.cpql-b.cpql);
+  renderRegionRows('lg_rg_top_cpql_tbody', byCPQL, totSpend, totLeads, rangeQL, totFB, totToi);
+}
+
+// ── Audience Table ──
+function renderLgAudienceTable(rows) {
+  _lgDimTable(rows, r => parseLgAudience(r.adset_name||''), 'lg_audience_tbody');
+}
+
+// ── Creative Performance ──
+function renderLgCreativeTable(rows) {
+  const creMap = {};
+  rows.forEach(r => {
+    const k = parseLgCreative(r.ad_name||r.adset_name||'');
+    if (!creMap[k]) creMap[k] = [];
+    creMap[k].push(r);
+  });
+  const sorted = Object.keys(creMap).sort((a,b) => calcLg(creMap[b]).leads - calcLg(creMap[a]).leads);
+  const tbody = document.getElementById('lg_creative_tbody');
+  if (tbody) {
+    tbody.innerHTML = sorted.map(k => {
+      const m = calcLg(creMap[k]);
+      return `<tr>
+        <td><b>${k}</b></td>
+        <td>${rs(m.spend)}</td><td>${num(m.imps,0)}</td><td>${num(m.clicks,0)}</td>
+        <td class="${ctrLgClass(m.ctr)}">${pct(m.ctr)}</td>
+        <td>${rs2(m.cpc)}</td>
+        <td><b>${num(m.leads,0)}</b></td>
+        <td class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+        <td>${pct(m.cvr)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Creative x Region breakdown
+  const crRegMap = {};
+  rows.forEach(r => {
+    const cr = parseLgCreative(r.ad_name||r.adset_name||'');
+    const rg = parseLgRegion(r.adset_name||'');
+    const k = cr + '|||' + rg;
+    if (!crRegMap[k]) crRegMap[k] = { cr, rg, rows:[] };
+    crRegMap[k].rows.push(r);
+  });
+  const crRegSorted = Object.values(crRegMap).sort((a,b) => calcLg(b.rows).leads - calcLg(a.rows).leads);
+  const tbody2 = document.getElementById('lg_creative_region_tbody');
+  if (tbody2) {
+    tbody2.innerHTML = crRegSorted.map(({cr,rg,rows:rr}) => {
+      const m = calcLg(rr);
+      return `<tr>
+        <td><b>${cr}</b></td><td>${rg}</td>
+        <td>${rs(m.spend)}</td>
+        <td><b>${num(m.leads,0)}</b></td>
+        <td class="${cplClass(m.cpl)}">${rs(m.cpl)}</td>
+        <td class="${ctrLgClass(m.ctr)}">${pct(m.ctr)}</td>
+        <td>${pct(m.cvr)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ── Region x Audience CPL Matrix ──
+function renderLgRxATable(rows) {
+  const wrap = document.getElementById('lg_rxaud_wrap');
+  if (!wrap) return;
+
+  const regions = [...new Set(rows.map(r => parseLgRegion(r.adset_name||'')))].filter(x=>x!=='Unknown').sort();
+  const auds    = [...new Set(rows.map(r => parseLgAudience(r.adset_name||'')))].filter(x=>x!=='Other').sort();
+
+  const dataMap = {};
+  rows.forEach(r => {
+    const k = parseLgRegion(r.adset_name||'') + '|||' + parseLgAudience(r.adset_name||'');
+    if (!dataMap[k]) dataMap[k] = [];
+    dataMap[k].push(r);
+  });
+
+  let tbl = `<table><thead><tr><th>Region</th>`;
+  auds.forEach(a => { tbl += `<th style="min-width:110px">${a}</th>`; });
+  tbl += '<th>Total</th></tr></thead><tbody>';
+
+  const regionTotals = regions.map(rg => {
+    const rRows = rows.filter(r => parseLgRegion(r.adset_name||'') === rg);
+    return { rg, m: calcLg(rRows) };
+  }).sort((a,b) => b.m.leads - a.m.leads);
+
+  regionTotals.forEach(({rg, m:total}) => {
+    tbl += `<tr><td><b>${rg}</b></td>`;
+    auds.forEach(a => {
+      const k = rg + '|||' + a;
+      const cell = dataMap[k] ? calcLg(dataMap[k]) : null;
+      if (cell && cell.leads > 0) {
+        tbl += `<td class="${cplClass(cell.cpl)}" style="text-align:center;font-size:11px;">
+          <div style="font-weight:700">${rs(cell.cpl)}</div>
+          <div style="color:#888;font-size:9px">${num(cell.leads,0)} leads</div>
+        </td>`;
+      } else {
+        tbl += `<td style="text-align:center;color:#ccc;">—</td>`;
+      }
+    });
+    tbl += `<td style="text-align:center;font-size:11px;">
+      <div class="${cplClass(total.cpl)}" style="font-weight:700">${rs(total.cpl)}</div>
+      <div style="color:#888;font-size:9px">${num(total.leads,0)} leads</div>
+    </td>`;
+    tbl += '</tr>';
+  });
+  tbl += '</tbody></table>';
+  wrap.innerHTML = tbl;
+}
+
+// ── Full render pass ──
+function lgDedup(rows) {
+  const seen = new Set();
+  return rows.filter(r => {
+    const k = (r.date||'') + '|' + (r.campaign_name||r.campaign||'');
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+function renderLeadGenAll(rows, detail, from, to) {
+  renderLgOverview(rows, from, to);
+  _buildLgTrendData(rows);
+  renderLgDayTable(rows);
+  renderLgRegionTable(detail, from, to);
+  renderLgAudienceTable(detail);
+  renderLgCreativeTable(detail);
+  renderLgRxATable(detail);
+}
+
+// ── Channel switch ──
+
+function switchLgOverview() {
+  document.querySelectorAll('[id^="tab-lg-"]').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
+  const ov = document.getElementById('tab-lg-overview');
+  if (ov) { ov.classList.remove('hidden'); ov.classList.add('active'); }
+  document.querySelectorAll('.lg-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.lg-tab').forEach(b => {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes('switchLgOverview')) b.classList.add('active');
+  });
+}
+
+function switchLgTab(tabId) {
+  document.querySelectorAll('[id^="tab-lg-"]').forEach(t => {
+    t.classList.add('hidden');
+    t.classList.remove('active');
+  });
+  document.querySelectorAll('.tab').forEach(t => { t.classList.add('hidden'); t.classList.remove('active'); });
+  const el = document.getElementById(tabId);
+  if (el) { el.classList.remove('hidden'); el.classList.add('active'); }
+
+  document.querySelectorAll('.lg-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.lg-tab').forEach(b => {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(tabId)) b.classList.add('active');
+  });
+}
+
+
+
+// ═══════════════════════════════════════════════════════════
+// STANDALONE LeadGen load() — Meta only, no D2C
+// ═══════════════════════════════════════════════════════════
+const S = { leadgen: [], leadgenDetail: [], from: '', to: '' };
+
+function lgDedup(rows) {
+  const seen = new Set();
+  return rows.filter(r => {
+    const k = (r.date||'') + '|' + (r.campaign_name||r.campaign||'');
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+async function load() {
+  const from = document.getElementById('d1').value;
+  const to   = document.getElementById('d2').value;
+  if (!from || !to) { alert('Please select a date range.'); return; }
+  S.from = from; S.to = to;
+
+  if (CONFIG.WINDSOR_API_KEY === 'YOUR_WINDSOR_API_KEY_HERE') {
+    alert('Windsor API key not configured. Open this file and set CONFIG.WINDSOR_API_KEY.'); return;
+  }
+
+  const btn    = document.getElementById('refreshBtn'); btn.disabled = true;
+  const loader = document.getElementById('loader');     loader.classList.remove('hidden');
+  document.getElementById('loaderMsg').textContent = 'Fetching LeadGen data from Meta…';
+
+  try {
+    const lgFilter = r => {
+      const c = r.campaign_name || r.campaign || '';
+      return /LeadGen/i.test(c) && /Kohler/i.test(c) && !/Dealer/i.test(c);
+    };
+    const [lgCamp, lgAdset] = await Promise.all([
+      windsorFetch({
+        connector: 'facebook', accounts: [CONFIG.META_ACCOUNT], date_from: from, date_to: to,
+        fields: ['date','campaign_name','campaign','spend','impressions','actions_link_click','actions_lead']
+      }),
+      windsorFetch({
+        connector: 'facebook', accounts: [CONFIG.META_ACCOUNT], date_from: from, date_to: to,
+        fields: ['date','campaign_name','adset_name','ad_name','spend','impressions','actions_link_click','actions_lead']
+      })
+    ]);
+    S.leadgen       = lgDedup(lgCamp.filter(lgFilter));
+    S.leadgenDetail = lgAdset.filter(lgFilter);
+    renderLeadGenAll(S.leadgen, S.leadgenDetail, from, to);
+  } catch (e) {
+    console.error('Load error:', e);
+    document.getElementById('loaderMsg').textContent = 'Error: ' + e.message;
+    alert('Error loading data: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    loader.classList.add('hidden');
+  }
+}
+
+// ── INIT ──
+(function() {
+  applyRange('yesterday');
+  const sel = document.getElementById('rangeSelect');
+  if (sel) sel.value = 'yesterday';
+  load();
+})();
+
+</script>
+</body>
+</html>

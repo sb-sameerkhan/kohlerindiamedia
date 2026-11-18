@@ -1,0 +1,125 @@
+{
+  "region_data": {
+    "TN": {
+      "ql": 3,
+      "spend": 680.8553373015873
+    },
+    "WB": {
+      "ql": 23,
+      "spend": 18610.386840100196
+    },
+    "NCR": {
+      "ql": 24,
+      "spend": 3503.034159695626
+    },
+    "NE": {
+      "ql": 28,
+      "spend": 6121.430880415731
+    },
+    "Rajasthan": {
+      "ql": 39,
+      "spend": 6858.823749732328
+    },
+    "ROM1": {
+      "ql": 8,
+      "spend": 1510.9079720279722
+    },
+    "ROM2": {
+      "ql": 9,
+      "spend": 1764.1886474614184
+    },
+    "UP North 1": {
+      "ql": 10,
+      "spend": 2450.8230783410136
+    },
+    "UP North 2": {
+      "ql": 16,
+      "spend": 1769.9615630885123
+    },
+    "UP West": {
+      "ql": 18,
+      "spend": 5557.714018016741
+    },
+    "Kerala": {
+      "ql": 13,
+      "spend": 3619.693967928558
+    },
+    "Pan India": {
+      "ql": 627,
+      "spend": 125560.64349427333
+    },
+    "Others": {
+      "ql": 32,
+      "spend": 0
+    },
+    "Gujarat": {
+      "ql": 13,
+      "spend": 2221.0018528884907
+    },
+    "JOB": {
+      "ql": 31,
+      "spend": 2893.9803127758164
+    },
+    "MPCG": {
+      "ql": 15,
+      "spend": 2114.621679369657
+    },
+    "KTK": {
+      "ql": 7,
+      "spend": 1361.896640522876
+    },
+    "Chandigarh": {
+      "ql": 18,
+      "spend": 2834.6257625042863
+    },
+    "UP East": {
+      "ql": 18,
+      "spend": 8239.981276130742
+    },
+    "Mumbai": {
+      "ql": 4,
+      "spend": 656.1434447044312
+    },
+    "AP&TS": {
+      "ql": 8,
+      "spend": 1453.4365112412977
+    }
+  },
+  "aud_data": {
+    "Interest": {
+      "ql": 133,
+      "spend": 36058.219693646395
+    },
+    "Lookalikes": {
+      "ql": 511,
+      "spend": 110510.75909494967
+    },
+    "AdvPlus": {
+      "ql": 288,
+      "spend": 53215.172399924544
+    },
+    "Others": {
+      "ql": 32,
+      "spend": 0
+    }
+  },
+  "matched_ql": 964,
+  "unmatched": {
+    "020226_Cheil_Kohler_LeadGen_Prospecting_TopCities_InstantForms_OTP_Interest_FullBathroom": 2,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_JOB_InstantForms_OTP_FullBathroom": 1,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_TN_InstantForms_OTP_FullBathroom": 1,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_AdvPlus_WB_InstantForms_OTP_FullBathroom": 1,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_Gujarat_InstantForms_OTP_FullBathroom": 1,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_JOB_InstantForms_OTP_FullBathroom": 1,
+    "070126_Cheil_Kohler_LeadGen_Prospecting_Interest&Beh_NCR_InstantForms_OTP_FullBathroom": 2,
+    "190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_Karnataka_InstantForms_OTP_FullBathroom": 2,
+    "190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_MPCG_InstantForms_OTP_FullBathroom": 2,
+    "190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_PanIndia_InstantForms_OTP_FullBathroom": 3,
+    "190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_TN_InstantForms_OTP_FullBathroom": 1,
+    "190326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_PanIndia_InstantForms_OTP_FullBathroom": 2,
+    "200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_KEC_PanIndia_InstantForms_OTP_FullBathroom-copy": 97,
+    "170426_Cheil_Kohler_LeadGen_Prospecting_Interest_PanIndia_InstantForms_OTP_FullBathroom": 55,
+    "200326_Cheil_Kohler_LeadGen_Prospecting_1%LAL_Convertors_TN_InstantForms_OTP_FullBathroom100626_Cheil_Kohler_LeadGen_Prospecting_Rajasthan_InstantForms_OTP_Interests_FullBathroom": 1,
+    "Grand Total": 1139
+  }
+}

@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler D2C — Creative & Campaign Analysis | June 2026</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f5f7; color: #1A1A2E; font-size: 14px; }
+
+  .header { background: #1A1A2E; color: #fff; padding: 36px 48px; }
+  .header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+  .header .sub { color: #aab0c4; margin-top: 6px; font-size: 13px; }
+  .sale-badge { display: inline-block; background: #CC0000; color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 3px; margin-left: 10px; vertical-align: middle; letter-spacing: 0.5px; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Summary boxes */
+  .summary-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 36px; }
+  .stat-box { background: #fff; border-radius: 8px; padding: 20px; border-left: 4px solid #CC0000; }
+  .stat-box .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stat-box .value { font-size: 22px; font-weight: 700; color: #1A1A2E; }
+  .stat-box .note { font-size: 11px; color: #aaa; margin-top: 4px; }
+  .stat-box.green { border-left-color: #27ae60; }
+  .stat-box.orange { border-left-color: #f39c12; }
+  .stat-box.blue { border-left-color: #2980b9; }
+
+  /* Section headings */
+  .section { background: #fff; border-radius: 8px; padding: 28px; margin-bottom: 24px; }
+  .section-title { font-size: 16px; font-weight: 700; color: #1A1A2E; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  .section-title .platform { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 3px; }
+  .meta-tag { background: #e8f0fe; color: #1a73e8; }
+  .gads-tag { background: #fce8e6; color: #d93025; }
+  .both-tag { background: #f3e8fd; color: #7b2d8b; }
+  .section-subtitle { font-size: 12px; color: #888; margin-bottom: 20px; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f8f9fa; text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; border-bottom: 2px solid #eee; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:hover td { background: #fafafa; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Status pills */
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .pill-scale { background: #d4edda; color: #155724; }
+  .pill-pause { background: #f8d7da; color: #721c24; }
+  .pill-watch { background: #fff3cd; color: #856404; }
+  .pill-ok { background: #d1ecf1; color: #0c5460; }
+
+  /* ROAS coloring */
+  .roas-good { color: #27ae60; font-weight: 700; }
+  .roas-ok { color: #f39c12; font-weight: 600; }
+  .roas-bad { color: #CC0000; font-weight: 700; }
+
+  /* Insights */
+  .insight-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .insight-box { background: #fff; border-radius: 8px; padding: 24px; }
+  .insight-box h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+  .insight-item { display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-start; }
+  .insight-num { width: 24px; height: 24px; border-radius: 50%; background: #CC0000; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .insight-num.green { background: #27ae60; }
+  .insight-num.orange { background: #f39c12; }
+  .insight-text { font-size: 13px; line-height: 1.5; color: #444; }
+  .insight-text strong { color: #1A1A2E; }
+
+  /* Action table */
+  .action-block { border-left: 3px solid #CC0000; padding-left: 16px; margin-bottom: 16px; }
+  .action-block.green { border-left-color: #27ae60; }
+  .action-block.orange { border-left-color: #f39c12; }
+  .action-block h4 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .action-block p { font-size: 12px; color: #555; line-height: 1.5; }
+
+  /* Callout */
+  .callout { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; color: #5d4037; }
+  .callout strong { color: #e65100; }
+
+  .callout-red { background: #fff0f0; border-color: #ffcdd2; color: #b71c1c; }
+  .callout-green { background: #f1f8e9; border-color: #c5e1a5; color: #2e7d32; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  .category-block { border-top: 3px solid #1A1A2E; padding-top: 16px; margin-bottom: 20px; }
+  .category-block h4 { font-size: 14px; font-weight: 700; color: #1A1A2E; margin-bottom: 8px; }
+  .metric-row { display: flex; gap: 24px; margin-bottom: 8px; flex-wrap: wrap; }
+  .metric { font-size: 12px; color: #666; }
+  .metric strong { color: #1A1A2E; font-size: 14px; display: block; }
+
+  .highlight-bar { height: 4px; border-radius: 2px; background: #eee; margin-bottom: 20px; position: relative; overflow: hidden; }
+  .highlight-bar .fill { height: 100%; background: #CC0000; border-radius: 2px; }
+
+  .sale-period { background: linear-gradient(135deg, #1A1A2E 0%, #2d3561 100%); color: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; }
+  .sale-period h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .sale-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .sale-metric { text-align: center; }
+  .sale-metric .val { font-size: 20px; font-weight: 700; color: #fff; }
+  .sale-metric .lbl { font-size: 11px; color: #aab0c4; margin-top: 4px; }
+
+  hr.divider { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+
+  .footer { text-align: center; padding: 20px; font-size: 11px; color: #999; }
+
+  @media (max-width: 768px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .two-col, .insight-row { grid-template-columns: 1fr; }
+    .sale-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Kohler D2C — Creative & Campaign Analysis <span class="sale-badge">MEGA SALE Jun 6–15</span></h1>
+  <div class="sub">June 1–23, 2026 &nbsp;|&nbsp; Meta Ads + Google Ads &nbsp;|&nbsp; D2C campaigns only &nbsp;|&nbsp; Social Beat × Cheil</div>
+</div>
+
+<div class="container">
+
+  <!-- TOTAL SPEND SUMMARY -->
+  <div class="summary-grid">
+    <div class="stat-box">
+      <div class="label">Total D2C Spend</div>
+      <div class="value">₹47.8L</div>
+      <div class="note">Meta ₹15.9L + Google ₹31.9L</div>
+    </div>
+    <div class="stat-box green">
+      <div class="label">Google Purchase Conv.</div>
+      <div class="value">832</div>
+      <div class="note">Avg. CPA ₹3,331</div>
+    </div>
+    <div class="stat-box">
+      <div class="label">Meta Sale Period ROAS</div>
+      <div class="value">2.53×</div>
+      <div class="note">Best: Remarketing 4.49×</div>
+    </div>
+    <div class="stat-box orange">
+      <div class="label">Meta Total Impressions</div>
+      <div class="value">40.5M</div>
+      <div class="note">626K clicks | Avg CTR 1.55%</div>
+    </div>
+    <div class="stat-box blue">
+      <div class="label">Active Campaigns</div>
+      <div class="value">34</div>
+      <div class="note">14 Meta + 20 Google Ads</div>
+    </div>
+  </div>
+
+  <!-- MEGA SALE CALLOUT -->
+  <div class="sale-period">
+    <h2>⚡ Mega Sale Period: Jun 6–15 (10 days, ~43% of month)</h2>
+    <div class="sale-grid">
+      <div class="sale-metric">
+        <div class="val">215</div>
+        <div class="lbl">Meta Purchases (sale)</div>
+      </div>
+      <div class="sale-metric">
+        <div class="val">4.49×</div>
+        <div class="lbl">Peak ROAS — Remarketing DPA</div>
+      </div>
+      <div class="sale-metric">
+        <div class="val">₹8.4L+</div>
+        <div class="lbl">Meta Spend in Sale Window</div>
+      </div>
+      <div class="sale-metric">
+        <div class="val">6</div>
+        <div class="lbl">New campaigns launched Jun 5</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;font-size:12px;color:#aab0c4;">
+      Remarketing DPA, Showering, and KitchenSinks were the top 3 ROAS performers during the sale window. Basins, CategoryPLP Showering, and AllProducts fell below 1× ROAS during peak sale spend.
+    </div>
+  </div>
+
+  <!-- ===================== META ADS ===================== -->
+  <div class="section">
+    <div class="section-title">Campaign-Level Summary <span class="platform meta-tag">META ADS</span></div>
+    <div class="section-subtitle">All D2C campaigns | Jun 1–23 | Sorted by spend</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Campaign</th>
+          <th>Spend (₹)</th>
+          <th>Impressions</th>
+          <th>Clicks</th>
+          <th>CTR</th>
+          <th>CPC (₹)</th>
+          <th>CPM (₹)</th>
+          <th>Frequency</th>
+          <th>Sale ROAS</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Remarketing_AllProducts_DPA</strong><br><span style="font-size:11px;color:#888">120326 | Retargeting</span></td>
+          <td>3,29,855</td>
+          <td>10.6L</td>
+          <td>14,021</td>
+          <td>1.33%</td>
+          <td>23.53</td>
+          <td>312.05</td>
+          <td style="color:#CC0000;font-weight:700">73.08 ⚠️</td>
+          <td class="roas-good">4.49×</td>
+          <td><span class="pill pill-watch">⚠ Refresh Audience</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_Kitchen_Sink&Faucet</strong><br><span style="font-size:11px;color:#888">100326 | Advantage+</span></td>
+          <td>1,98,971</td>
+          <td>120.4L</td>
+          <td>68,213</td>
+          <td>0.57%</td>
+          <td>2.92</td>
+          <td>16.53</td>
+          <td>2.38</td>
+          <td class="roas-good">2.39×</td>
+          <td><span class="pill pill-ok">Monitor</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_Showering</strong><br><span style="font-size:11px;color:#888">280426 | Advantage+</span></td>
+          <td>1,83,675</td>
+          <td>61.3L</td>
+          <td>65,038</td>
+          <td>1.06%</td>
+          <td>2.82</td>
+          <td>29.98</td>
+          <td>1.99</td>
+          <td class="roas-good">2.58×</td>
+          <td><span class="pill pill-scale">↑ Scale</span></td>
+        </tr>
+        <tr>
+          <td><strong>Lookalike_AllProducts</strong><br><span style="font-size:11px;color:#888">160126 | LAL</span></td>
+          <td>1,70,012</td>
+          <td>18.6L</td>
+          <td>88,545</td>
+          <td>4.77%</td>
+          <td>1.92</td>
+          <td>91.65</td>
+          <td>2.18</td>
+          <td class="roas-good">2.53×</td>
+          <td><span class="pill pill-scale">↑ Scale</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_KitchenSinks</strong><br><span style="font-size:11px;color:#888">280426 | Advantage+</span></td>
+          <td>1,58,107</td>
+          <td>25.5L</td>
+          <td>71,089</td>
+          <td>2.79%</td>
+          <td>2.22</td>
+          <td>61.96</td>
+          <td>1.98</td>
+          <td class="roas-good">2.56×</td>
+          <td><span class="pill pill-scale">↑ Scale</span></td>
+        </tr>
+        <tr>
+          <td><strong>AllProducts</strong><br><span style="font-size:11px;color:#888">100326 | Advantage+</span></td>
+          <td>1,23,471</td>
+          <td>49.9L</td>
+          <td>40,244</td>
+          <td>0.81%</td>
+          <td>3.07</td>
+          <td>24.74</td>
+          <td>1.60</td>
+          <td class="roas-bad">0.99×</td>
+          <td><span class="pill pill-pause">✕ Pause</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_Toilet_ToiletBundle</strong><br><span style="font-size:11px;color:#888">070426 | Advantage+</span></td>
+          <td>1,15,177</td>
+          <td>22.5L</td>
+          <td>1,55,438</td>
+          <td style="color:#27ae60;font-weight:700">6.91%</td>
+          <td>0.74</td>
+          <td>51.20</td>
+          <td>1.86</td>
+          <td class="roas-ok">1.83×</td>
+          <td><span class="pill pill-ok">Optimise</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_Top40Products</strong><br><span style="font-size:11px;color:#888">220526 | LAL + Interests</span></td>
+          <td>95,724</td>
+          <td>17.7L</td>
+          <td>14,855</td>
+          <td>0.84%</td>
+          <td>6.44</td>
+          <td>54.13</td>
+          <td>1.46</td>
+          <td class="roas-bad">0.85×</td>
+          <td><span class="pill pill-pause">✕ Pause</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_ToiletCombos</strong><br><span style="font-size:11px;color:#888">050626 | Advantage+</span></td>
+          <td>57,843</td>
+          <td>17.6L</td>
+          <td>61,198</td>
+          <td>3.47%</td>
+          <td>0.95</td>
+          <td>32.79</td>
+          <td>1.69</td>
+          <td class="roas-bad">0.84×</td>
+          <td><span class="pill pill-watch">⚠ Watch</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_BoldDays</strong><br><span style="font-size:11px;color:#888">050626 | LAL + Adv+</span></td>
+          <td>53,558</td>
+          <td>16.3L</td>
+          <td>10,397</td>
+          <td>0.64%</td>
+          <td>5.15</td>
+          <td>32.95</td>
+          <td>1.47</td>
+          <td class="roas-ok">1.57×</td>
+          <td><span class="pill pill-watch">⚠ Watch</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_Basins</strong><br><span style="font-size:11px;color:#888">070426 | Advantage+</span></td>
+          <td>43,212</td>
+          <td>39.1L</td>
+          <td>25,761</td>
+          <td>0.66%</td>
+          <td>1.68</td>
+          <td>11.07</td>
+          <td>2.07</td>
+          <td class="roas-bad">0.46×</td>
+          <td><span class="pill pill-pause">✕ Pause</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_CategoryPLP_KitchenSink&Faucet</strong><br><span style="font-size:11px;color:#888">060626 | Interests</span></td>
+          <td>27,417</td>
+          <td>1.1L</td>
+          <td>6,137</td>
+          <td style="color:#27ae60">5.34%</td>
+          <td>4.47</td>
+          <td>238.57</td>
+          <td>1.75</td>
+          <td class="roas-bad">0.79×</td>
+          <td><span class="pill pill-watch">⚠ Watch</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_CategoryPLP_Showering</strong><br><span style="font-size:11px;color:#888">050626 | Interests</span></td>
+          <td>20,943</td>
+          <td>2.5L</td>
+          <td>4,215</td>
+          <td>1.68%</td>
+          <td>4.97</td>
+          <td>83.53</td>
+          <td>1.55</td>
+          <td class="roas-bad">0.12×</td>
+          <td><span class="pill pill-pause">✕ Pause</span></td>
+        </tr>
+        <tr>
+          <td><strong>Prospecting_KitchenSinks_Device_BoldDays</strong><br><span style="font-size:11px;color:#888">120626 | Advantage+ | iPhone</span></td>
+          <td>14,005</td>
+          <td>1.9L</td>
+          <td>971</td>
+          <td>0.52%</td>
+          <td>14.42</td>
+          <td>75.50</td>
+          <td>1.57</td>
+          <td class="roas-ok">2.90×</td>
+          <td><span class="pill pill-ok">Monitor</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- GOOGLE ADS CAMPAIGN TABLE -->
+  <div class="section">
+    <div class="section-title">Campaign-Level Summary <span class="platform gads-tag">GOOGLE ADS</span></div>
+    <div class="section-subtitle">Kohler India Ecomm | Jun 1–23 | Purchase conversions only (DemandGen tracked separately)</div>
+
+    <div class="callout">
+      <strong>⚠ DemandGen Note:</strong> DemandGen campaigns show conversion rates of 38–57% with CPAs of ₹2–3. These are tracking micro-conversions (clicks/page views), not purchases. They are valuable for top-of-funnel but should not be compared against PMax/Search purchase CPAs.
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Campaign</th>
+          <th>Spend (₹)</th>
+          <th>Impr.</th>
+          <th>Clicks</th>
+          <th>CTR</th>
+          <th>Conv.</th>
+          <th>CPA (₹)</th>
+          <th>Conv Rate</th>
+          <th>IS %</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Shopping — Standard AllProducts</strong><br><span style="font-size:11px;color:#888">190525 | Shopping</span></td>
+          <td>9,14,802</td>
+          <td>56.7L</td>
+          <td>85,959</td>
+          <td>1.52%</td>
+          <td>287</td>
+          <td style="color:#27ae60;font-weight:700">3,189</td>
+          <td>0.33%</td>
+          <td>71.2%</td>
+          <td><span class="pill pill-scale">↑ Scale</span></td>
+        </tr>
+        <tr>
+          <td><strong>Bidet — PMax</strong><br><span style="font-size:11px;color:#888">190126 | Performance Max</span></td>
+          <td>4,24,410</td>
+          <td>29.3L</td>
+          <td>51,410</td>
+          <td>1.76%</td>
+          <td>181</td>
+          <td style="color:#27ae60;font-weight:700">2,344</td>
+          <td>0.35%</td>
+          <td>62.9%</td>
+          <td><span class="pill pill-scale">↑ Scale</span></td>
+        </tr>
+        <tr>
+          <td><strong>Toilet/ToiletSeats — PMax</strong><br><span style="font-size:11px;color:#888">050326 | Feed Only</span></td>
+          <td>3,54,921</td>
+          <td>18.1L</td>
+          <td>31,325</td>
+          <td>1.73%</td>
+          <td>64</td>
+          <td style="color:#CC0000;font-weight:700">5,509</td>
+          <td>0.21%</td>
+          <td>37.3%</td>
+          <td><span class="pill pill-watch">⚠ Optimise</span></td>
+        </tr>
+        <tr>
+          <td><strong>FocusProducts NonBrand — PMax FeedOnly</strong><br><span style="font-size:11px;color:#888">080426 | Feed Only</span></td>
+          <td>3,14,800</td>
+          <td>19.9L</td>
+          <td>23,220</td>
+          <td>1.17%</td>
+          <td>81</td>
+          <td>3,907</td>
+          <td>0.35%</td>
+          <td>35.7%</td>
+          <td><span class="pill pill-watch">⚠ Monitor</span></td>
+        </tr>
+        <tr>
+          <td><strong>Brand Search — AllProducts</strong><br><span style="font-size:11px;color:#888">030423 | Search</span></td>
+          <td>2,20,706</td>
+          <td>32,039</td>
+          <td>9,046</td>
+          <td style="color:#27ae60;font-weight:700">28.23%</td>
+          <td>82</td>
+          <td>2,685</td>
+          <td>0.91%</td>
+          <td style="color:#27ae60;font-weight:700">94.8%</td>
+          <td><span class="pill pill-scale">↑ Maintain</span></td>
+        </tr>
+        <tr>
+          <td><strong>BoldDays KitchenFaucet — PMax</strong><br><span style="font-size:11px;color:#888">050626 | Sale Campaign</span></td>
+          <td>1,16,048</td>
+          <td>13.2L</td>
+          <td>17,734</td>
+          <td>1.35%</td>
+          <td>23</td>
+          <td style="color:#CC0000;font-weight:700">5,135</td>
+          <td>0.13%</td>
+          <td>23.1%</td>
+          <td><span class="pill pill-pause">✕ Pause / Rethink</span></td>
+        </tr>
+        <tr>
+          <td><strong>HighAOV &gt;10k — PMax FeedOnly</strong><br><span style="font-size:11px;color:#888">160126 | Premium Products</span></td>
+          <td>1,36,638</td>
+          <td>3.3L</td>
+          <td>10,745</td>
+          <td>3.24%</td>
+          <td>22</td>
+          <td>6,106</td>
+          <td>0.21%</td>
+          <td>24.7%</td>
+          <td><span class="pill pill-watch">⚠ Review AOV match</span></td>
+        </tr>
+        <tr>
+          <td><strong>Brand RLSA — AllProducts</strong><br><span style="font-size:11px;color:#888">120523 | Search + Remarketing</span></td>
+          <td>1,26,780</td>
+          <td>18,638</td>
+          <td>5,420</td>
+          <td style="color:#27ae60;font-weight:700">29.08%</td>
+          <td>55</td>
+          <td style="color:#27ae60;font-weight:700">2,295</td>
+          <td>1.02%</td>
+          <td style="color:#27ae60;font-weight:700">96.8%</td>
+          <td><span class="pill pill-scale">↑ Best CPA</span></td>
+        </tr>
+        <tr>
+          <td><strong>KitchenFaucet — PMax</strong><br><span style="font-size:11px;color:#888">240425 | Older campaign</span></td>
+          <td>1,71,497</td>
+          <td>1.4L</td>
+          <td>7,178</td>
+          <td>4.95%</td>
+          <td>24</td>
+          <td style="color:#CC0000;font-weight:700">7,018</td>
+          <td>0.34%</td>
+          <td>22.8%</td>
+          <td><span class="pill pill-pause">✕ Pause</span></td>
+        </tr>
+        <tr>
+          <td><strong>Mirrors — PMax (MaxConvValue)</strong><br><span style="font-size:11px;color:#888">150126 | Prospecting</span></td>
+          <td>33,975</td>
+          <td>84,228</td>
+          <td>2,185</td>
+          <td>2.59%</td>
+          <td>13</td>
+          <td>2,622</td>
+          <td>0.59%</td>
+          <td>24.5%</td>
+          <td><span class="pill pill-ok">Monitor + Budget</span></td>
+        </tr>
+        <tr>
+          <td><strong>Showerhead — PMax</strong><br><span style="font-size:11px;color:#888">050126</span></td>
+          <td>30,567</td>
+          <td>1.2L</td>
+          <td>2,712</td>
+          <td>2.20%</td>
+          <td>9</td>
+          <td>3,445</td>
+          <td>0.33%</td>
+          <td>20.3%</td>
+          <td><span class="pill pill-ok">Monitor</span></td>
+        </tr>
+        <tr>
+          <td><strong>HealthFaucet — PMax</strong><br><span style="font-size:11px;color:#888">080426</span></td>
+          <td>42,187</td>
+          <td>20,331</td>
+          <td>1,570</td>
+          <td>7.72%</td>
+          <td>14</td>
+          <td>2,980</td>
+          <td>0.90%</td>
+          <td>30.5%</td>
+          <td><span class="pill pill-ok">Scale cautiously</span></td>
+        </tr>
+        <tr>
+          <td><strong>ToiletArea Combos — PMax (Creative+Feed)</strong><br><span style="font-size:11px;color:#888">050626 | Sale launch</span></td>
+          <td>76,393</td>
+          <td>3.2L</td>
+          <td>15,879</td>
+          <td>4.96%</td>
+          <td>2,267*</td>
+          <td>33.70*</td>
+          <td>14.27%</td>
+          <td>20.2%</td>
+          <td><span class="pill pill-watch">⚠ Verify conv type</span></td>
+        </tr>
+        <tr style="background:#f9f9f9;font-style:italic;color:#888">
+          <td colspan="10" style="font-size:12px;padding:8px 12px">DemandGen campaigns (6 total: Shower, KitchenSink, HealthFaucet, KitchenFaucet, Mirror, Bidet) — ₹2.62L combined spend. Tracking engagement conversions, not purchases. Useful for awareness KPIs only.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CATEGORY BREAKDOWN -->
+  <div class="section">
+    <div class="section-title">Category-Level Breakdown <span class="platform both-tag">META + GOOGLE</span></div>
+    <div class="section-subtitle">Combined spend, performance signal, and investment priority by product category</div>
+
+    <div class="two-col">
+      <div>
+        <div class="category-block">
+          <h4>🚽 Toilets & Combos</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹7.0L</strong>Combined Spend</div>
+            <div class="metric"><strong>97</strong>Google Conv</div>
+            <div class="metric"><strong>18 (Meta)</strong>Purchases (sale)</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Toilet PMax CPA is ₹5,509 — high. Meta Toilet_Bundle has the highest CTR in the account (6.91%) but ROAS is 1.83×. ToiletCombos ROAS of 0.84× needs investigation — good CTR (3.47%) means landing page or pricing may be the issue.</p>
+          <div style="margin-top:8px"><span class="pill pill-watch">Optimise Google | Fix funnel on Meta Combos</span></div>
+        </div>
+
+        <div class="category-block">
+          <h4>🍽️ Kitchen Sink & Faucet</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹8.0L</strong>Combined Spend</div>
+            <div class="metric"><strong>47</strong>Google Conv</div>
+            <div class="metric"><strong>54 (Meta)</strong>Purchases (sale)</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Best Meta performer in terms of volume. Kitchen Sinks (280426) ROAS 2.56×. Kitchen Sink&Faucet Adv+ (100326) ROAS 2.39×. Old KitchenFaucet PMax on Google has CPA ₹7,018 and should be paused. New BoldDays KitchenFaucet PMax also CPA ₹5,135.</p>
+          <div style="margin-top:8px"><span class="pill pill-scale">Scale Meta | Pause old Google PMax</span></div>
+        </div>
+
+        <div class="category-block">
+          <h4>🚿 Showering</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹3.2L</strong>Combined Spend</div>
+            <div class="metric"><strong>9</strong>Google Conv</div>
+            <div class="metric"><strong>28 (Meta)</strong>Purchases (sale)</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Meta Showering (280426) is the strongest performance ratio — ROAS 2.58× with large reach (61L impressions). Google Showerhead PMax underfunded (₹30K, IS 20.3%) and Category PLP Showering on Meta has terrible ROAS (0.12×).</p>
+          <div style="margin-top:8px"><span class="pill pill-scale">Scale Meta | Fund Google Showerhead PMax</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="category-block">
+          <h4>🪞 Bidet</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹4.5L</strong>Google Spend</div>
+            <div class="metric"><strong>181</strong>Google Conv</div>
+            <div class="metric"><strong>₹2,344</strong>CPA</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Bidet PMax is the best-performing Google campaign by CPA after Brand RLSA. IS at 62.9% means there's room to scale. No Meta campaign yet — opportunity to open the category on social.</p>
+          <div style="margin-top:8px"><span class="pill pill-scale">Scale Google PMax + test Meta</span></div>
+        </div>
+
+        <div class="category-block">
+          <h4>🪴 Basins</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹43K</strong>Meta Spend</div>
+            <div class="metric"><strong>4</strong>Purchases</div>
+            <div class="metric"><strong>0.46×</strong>ROAS</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Worst ROAS in the Meta portfolio. 39L impressions served, 4 purchases. CTR of 0.66% suggests creative isn't resonating. No Google campaign running. Pause Meta immediately and rethink the creative and audience approach before reinvesting.</p>
+          <div style="margin-top:8px"><span class="pill pill-pause">Pause immediately</span></div>
+        </div>
+
+        <div class="category-block">
+          <h4>🪞 Mirrors</h4>
+          <div class="metric-row">
+            <div class="metric"><strong>₹56K</strong>Google Spend</div>
+            <div class="metric"><strong>13</strong>Conv</div>
+            <div class="metric"><strong>₹2,622</strong>CPA</div>
+          </div>
+          <p style="font-size:12px;color:#555;margin-top:6px">Good CPA on Google (₹2,622), but IS is only 24.5% — severely underfunded. Mirrors are a high-consideration category that responds well to visual creative. Budget should be increased here.</p>
+          <div style="margin-top:8px"><span class="pill pill-scale">Scale budget 3×</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIENCE BREAKDOWN -->
+  <div class="section">
+    <div class="section-title">Audience-Level Breakdown <span class="platform meta-tag">META ADS</span></div>
+    <div class="section-subtitle">Performance by targeting type, based on adset naming conventions</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Audience Type</th>
+          <th>Campaigns</th>
+          <th>Approx Spend</th>
+          <th>Avg CTR</th>
+          <th>Signal</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Remarketing — DPA (180 Days ATC)</strong></td>
+          <td>1 campaign</td>
+          <td>₹3.3L</td>
+          <td>1.33%</td>
+          <td>Best ROAS (4.49×) but <span style="color:#CC0000;font-weight:700">frequency 73×</span> — audience is critically fatigued. CPM ₹312 (3× account avg).</td>
+          <td><span class="pill pill-pause">Refresh window + creative urgently</span></td>
+        </tr>
+        <tr>
+          <td><strong>Advantage+ (AdvPlus)</strong></td>
+          <td>7 campaigns</td>
+          <td>₹8.3L</td>
+          <td>1.0–6.9%</td>
+          <td>Dominant targeting. Toilet_Bundle Adv+ has exceptional CTR (6.91%). Kitchen Sinks and Showering Adv+ performing above ROAS 2.5×.</td>
+          <td><span class="pill pill-scale">Primary targeting — scale further</span></td>
+        </tr>
+        <tr>
+          <td><strong>Lookalike (LAL)</strong></td>
+          <td>2 campaigns</td>
+          <td>₹2.2L</td>
+          <td>1.5–4.8%</td>
+          <td>Lookalike AllProducts CTR 4.77% — strongest creative CTR in prospecting. ROAS 2.53×. Healthy frequency (2.18).</td>
+          <td><span class="pill pill-scale">Expand LAL seed audiences</span></td>
+        </tr>
+        <tr>
+          <td><strong>Interests-Based</strong></td>
+          <td>3 campaigns</td>
+          <td>₹60K</td>
+          <td>1.7–5.3%</td>
+          <td>CategoryPLP campaigns. Good CTR (KitchenSink&Faucet 5.34%) but extremely poor ROAS (0.12–0.79×). Interests audiences not converting despite high click-through. Landing page intent mismatch.</td>
+          <td><span class="pill pill-pause">Pause all interest-based</span></td>
+        </tr>
+        <tr>
+          <td><strong>Device-Targeted (iPhone)</strong></td>
+          <td>1 campaign</td>
+          <td>₹9.6K</td>
+          <td>0.53%</td>
+          <td>BoldDays iPhone-targeted — early data only (launched Jun 12). ROAS 2.90× but tiny spend. Test worth continuing.</td>
+          <td><span class="pill pill-ok">Continue testing</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- CREATIVE INSIGHTS -->
+  <div class="insight-row">
+    <div class="insight-box">
+      <h3>🎨 Creative Signals — What's Working</h3>
+      <div class="insight-item">
+        <div class="insight-num green">1</div>
+        <div class="insight-text"><strong>Toilet Bundle creative has the highest CTR in the account at 6.91%.</strong> This tells you the bundle angle (product + accessories + price point together) is cutting through far better than single-product creatives. Apply bundle creative logic to Kitchen and Showering.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num green">2</div>
+        <div class="insight-text"><strong>Lookalike AllProducts: CTR 4.77% with ROAS 2.53×.</strong> This creative set is doing both — high click-through and actual purchase conversion. The all-product range angle appears to be driving genuine intent. Creative is healthy; scale the audience.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num green">3</div>
+        <div class="insight-text"><strong>CategoryPLP KitchenSink&Faucet: CTR 5.34%.</strong> Strong creative engagement even with interests targeting. The creative is compelling but the audience is wrong (interests users don't convert). Move this creative to Advantage+ targeting.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num green">4</div>
+        <div class="insight-text"><strong>Google HealthFaucet PMax: CTR 7.72%</strong> — highest click-through on Google. Small budget but excellent early signal. The category is purchase-ready (CPA ₹2,980). Increase budget 3-4× to find the optimal spend level.</div>
+      </div>
+    </div>
+
+    <div class="insight-box">
+      <h3>⚠️ Creative Signals — What's Failing</h3>
+      <div class="insight-item">
+        <div class="insight-num">1</div>
+        <div class="insight-text"><strong>Remarketing DPA frequency at 73×.</strong> The same user is seeing the DPA ad 73 times on average. ROAS is still 4.49× but this will collapse. The remarketing audience pool is near-exhausted. Either widen the window, reduce daily frequency cap, or rotate creative immediately.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">2</div>
+        <div class="insight-text"><strong>Basins creative: 39L impressions, 4 purchases, ROAS 0.46×.</strong> Reach is enormous but nothing is converting. The creative may be too generic or not showcasing the product's premium positioning. This is not a targeting problem — it's a creative relevance problem.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">3</div>
+        <div class="insight-text"><strong>BoldDays KitchenFaucet PMax on Google: CPA ₹5,135 with only 23 conversions on ₹1.16L spend.</strong> The sale-specific creative assets uploaded to PMax are not generating purchase signals. Either the creatives aren't triggering purchase intent or the landing page isn't converting sale traffic.</div>
+      </div>
+      <div class="insight-item">
+        <div class="insight-num">4</div>
+        <div class="insight-text"><strong>Kitchen_Sink&Faucet Prospecting: 0.57% CTR with 12M impressions.</strong> The creative is broadly distributed but failing to generate thumb-stop attention. With ₹2L spend and 2.39× ROAS the funnel is working, but creative refresh needed to maintain efficiency as frequency climbs.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MEGA SALE ANALYSIS -->
+  <div class="section">
+    <div class="section-title">Mega Sale Period Deep Dive (Jun 6–15) <span class="platform both-tag">META ROAS</span></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Campaign</th>
+          <th>Sale Spend (₹)</th>
+          <th>Purchases</th>
+          <th>ROAS</th>
+          <th>ATC</th>
+          <th>Initiate Checkout</th>
+          <th>Verdict</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#f9fff9">
+          <td><strong>Remarketing_AllProducts_DPA</strong></td>
+          <td>1,76,832</td>
+          <td>40</td>
+          <td class="roas-good">4.49×</td>
+          <td>227</td>
+          <td>118</td>
+          <td>Best performer. Audience fatigue is the only risk.</td>
+        </tr>
+        <tr style="background:#f9fff9">
+          <td><strong>Prospecting_Showering</strong></td>
+          <td>1,01,596</td>
+          <td>27</td>
+          <td class="roas-good">2.58×</td>
+          <td>207</td>
+          <td>71</td>
+          <td>Solid. Good ATC:Purchase ratio. Scale post-sale.</td>
+        </tr>
+        <tr style="background:#f9fff9">
+          <td><strong>Prospecting_KitchenSinks</strong></td>
+          <td>83,736</td>
+          <td>29</td>
+          <td class="roas-good">2.56×</td>
+          <td>140</td>
+          <td>50</td>
+          <td>Efficient. High post-engagement (22K+). Scale.</td>
+        </tr>
+        <tr style="background:#f9fff9">
+          <td><strong>Lookalike_AllProducts</strong></td>
+          <td>96,611</td>
+          <td>27</td>
+          <td class="roas-good">2.53×</td>
+          <td>303</td>
+          <td>86</td>
+          <td>Good ATC volume. Creative is working.</td>
+        </tr>
+        <tr style="background:#f9fff9">
+          <td><strong>Kitchen_Sink&Faucet Prospecting</strong></td>
+          <td>98,836</td>
+          <td>25</td>
+          <td class="roas-good">2.39×</td>
+          <td>140</td>
+          <td>59</td>
+          <td>Working well. Continue.</td>
+        </tr>
+        <tr>
+          <td><strong>Toilet_ToiletBundle</strong></td>
+          <td>60,201</td>
+          <td>11</td>
+          <td class="roas-ok">1.83×</td>
+          <td>211</td>
+          <td>32</td>
+          <td>High ATC (211) but low purchase conversion. Cart abandonment issue.</td>
+        </tr>
+        <tr>
+          <td><strong>BoldDays Prospecting</strong></td>
+          <td>50,642</td>
+          <td>11</td>
+          <td class="roas-ok">1.57×</td>
+          <td>75</td>
+          <td>24</td>
+          <td>Below target. Sale creative may not be differentiated.</td>
+        </tr>
+        <tr style="background:#fff5f5">
+          <td><strong>AllProducts</strong></td>
+          <td>79,148</td>
+          <td>13</td>
+          <td class="roas-bad">0.99×</td>
+          <td>132</td>
+          <td>41</td>
+          <td>Burning budget at break-even. Pause this.</td>
+        </tr>
+        <tr style="background:#fff5f5">
+          <td><strong>Top40Products</strong></td>
+          <td>52,147</td>
+          <td>12</td>
+          <td class="roas-bad">0.85×</td>
+          <td>141</td>
+          <td>45</td>
+          <td>Below 1×. High ATC but poor close rate.</td>
+        </tr>
+        <tr style="background:#fff5f5">
+          <td><strong>ToiletCombos</strong></td>
+          <td>50,181</td>
+          <td>7</td>
+          <td class="roas-bad">0.84×</td>
+          <td>89</td>
+          <td>20</td>
+          <td>Too early but ROAS is concerning. Watch closely.</td>
+        </tr>
+        <tr style="background:#fff5f5">
+          <td><strong>Prospecting_Basins</strong></td>
+          <td>29,080</td>
+          <td>4</td>
+          <td class="roas-bad">0.46×</td>
+          <td>18</td>
+          <td>8</td>
+          <td>Irredeemable during sale. Pause.</td>
+        </tr>
+        <tr style="background:#fff5f5">
+          <td><strong>CategoryPLP_Showering</strong></td>
+          <td>19,966</td>
+          <td>1</td>
+          <td class="roas-bad">0.12×</td>
+          <td>28</td>
+          <td>4</td>
+          <td>Critical underperformance. Pause immediately.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ACTIONABLES -->
+  <div class="section">
+    <div class="section-title">Actionables — What to Do Now</div>
+
+    <div class="two-col">
+      <div>
+        <h3 style="color:#27ae60;font-size:14px;margin-bottom:16px">↑ SCALE THESE</h3>
+
+        <div class="action-block green">
+          <h4>Google: Standard Shopping (AllProducts)</h4>
+          <p>₹9.15L spend, 287 conversions, CPA ₹3,189. IS at 71.2% — still 29% share uncaptured. This is the highest-volume converter in the account. Increase daily budget 20–30%.</p>
+        </div>
+
+        <div class="action-block green">
+          <h4>Google: Bidet PMax</h4>
+          <p>CPA ₹2,344 — best among all PMax campaigns. 62.9% IS means budget is the limiting factor. Scale to capture remaining 37% share.</p>
+        </div>
+
+        <div class="action-block green">
+          <h4>Google: Brand RLSA</h4>
+          <p>CPA ₹2,295 — lowest in the Google account. IS near 97%. Continue protecting brand search at current spend. Don't cut this.</p>
+        </div>
+
+        <div class="action-block green">
+          <h4>Meta: Showering, KitchenSinks, Lookalike AllProducts</h4>
+          <p>All three show ROAS 2.5×+ during mega sale and maintain healthy frequency (under 2.2). Increase budget 25–30% on each. These are the account's top performers.</p>
+        </div>
+
+        <div class="action-block green">
+          <h4>Google: Mirrors PMax (3× budget)</h4>
+          <p>CPA ₹2,622 at just 24.5% IS — massively underfunded for the performance signal it's showing. Increase from ₹34K to ₹1L+ and let the algorithm find its floor.</p>
+        </div>
+
+        <div class="action-block green">
+          <h4>Google: HealthFaucet PMax</h4>
+          <p>CTR 7.72%, CPA ₹2,980. Very small budget currently. Strong purchase-intent signal. Double budget and monitor for 2 weeks.</p>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="color:#CC0000;font-size:14px;margin-bottom:16px">✕ PAUSE THESE</h3>
+
+        <div class="action-block">
+          <h4>Meta: AllProducts (100326)</h4>
+          <p>ROAS 0.99× during peak sale. If it can't convert at sale pricing, it won't at normal pricing. ₹1.23L already spent. Pause and reallocate to Showering and KitchenSinks.</p>
+        </div>
+
+        <div class="action-block">
+          <h4>Meta: Basins (070426)</h4>
+          <p>ROAS 0.46×. 39L impressions, 4 purchases. This is a creative/offer problem, not a targeting problem. Pause, rebuild creative strategy, relaunch only after creative refresh.</p>
+        </div>
+
+        <div class="action-block">
+          <h4>Meta: CategoryPLP Showering (050626)</h4>
+          <p>ROAS 0.12× — effectively zero return. Every rupee spent here is a loss. Immediate pause.</p>
+        </div>
+
+        <div class="action-block">
+          <h4>Meta: Top40Products (220526)</h4>
+          <p>ROAS 0.85×. High ATC (141) but poor close rate suggests a product mix or landing page problem. Pause and investigate product-page conversion rates.</p>
+        </div>
+
+        <div class="action-block">
+          <h4>Google: KitchenFaucet PMax (240425)</h4>
+          <p>CPA ₹7,018 — highest in the Google portfolio. Budget is competing with the new BoldDays KitchenFaucet campaign. Pause old campaign, let the new one (once optimised) own the category.</p>
+        </div>
+
+        <div class="action-block">
+          <h4>Google: BoldDays KitchenFaucet PMax (050626)</h4>
+          <p>CPA ₹5,135, Conv Rate 0.13%. The sale creative assets are not driving purchase intent on Google. Pause unless the creative is refreshed with stronger call-to-action assets. Currently burning ₹1.16L with poor returns.</p>
+        </div>
+
+        <h3 style="color:#f39c12;font-size:14px;margin-bottom:16px;margin-top:20px">⚠ FIX THESE</h3>
+
+        <div class="action-block orange">
+          <h4>Meta: Remarketing DPA — Frequency 73×</h4>
+          <p>Reduce from 180-day to 30–60-day ATC window. Introduce frequency cap at 3–5 per week. Rotate in 3+ new creative variants. ROAS of 4.49× is the account's best — don't let this decay from neglect.</p>
+        </div>
+
+        <div class="action-block orange">
+          <h4>Meta: Toilet_ToiletBundle — ATC leak</h4>
+          <p>211 ATCs, only 11 purchases during sale (5.2% close rate). The creative and click are working (CTR 6.91%). The leak is post-click. Check the cart/checkout flow for the bundle product page specifically.</p>
+        </div>
+
+        <div class="action-block orange">
+          <h4>Google: Toilet/ToiletSeats PMax — CPA ₹5,509</h4>
+          <p>IS at 37.3% suggests budget constraint. But CPA is already high. Before scaling, audit the product feed quality and creative assets in PMax. Consider splitting high-performing products into Shopping campaign instead.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIORITY ACTIONS SUMMARY -->
+  <div class="callout callout-red" style="font-size:13px;">
+    <strong>5 things to do in the next 48 hours:</strong><br><br>
+    1. <strong>Pause Basins, AllProducts, CategoryPLP Showering, Top40Products</strong> — collectively ₹2.8L/month burning below ROAS 1×.<br>
+    2. <strong>Fix Remarketing DPA</strong> — 73× frequency is destroying a 4.49× ROAS campaign. Narrow audience window today.<br>
+    3. <strong>Scale Bidet PMax and Mirrors PMax</strong> — best CPAs on Google (₹2,344 and ₹2,622) but both severely underfunded.<br>
+    4. <strong>Pause KitchenFaucet PMax (old, 240425)</strong> — ₹1.7L spend at ₹7,018 CPA. Redirect to Standard Shopping.<br>
+    5. <strong>Move CategoryPLP KitchenSink&Faucet creative to Advantage+</strong> — CTR 5.34% proves creative works; interests targeting doesn't convert.
+  </div>
+
+  <div class="callout callout-green" style="font-size:13px;margin-top:0">
+    <strong>Post-sale budget rebalancing:</strong> The mega sale (Jun 6–15) is over. The new BoldDays campaigns (ToiletCombos, BoldDays, CategoryPLP) that launched on Jun 5 need 2–3 more weeks of data before final verdict. However, CategoryPLP Showering (0.12× ROAS) and Basins (0.46× ROAS) have enough data to pause now regardless of the sale period overlap.
+  </div>
+
+</div>
+
+<div class="footer">
+  Kohler D2C — Creative Analysis | June 2026 | Social Beat × Cheil South West Asia | Data via Windsor.ai
+</div>
+
+</body>
+</html>

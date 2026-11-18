@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<!--
+  Kohler Branding Tracker — Mega Campaign (Aug'26 onwards)
+  =======================================================
+  Sources: DV360, Meta Ads, LinkedIn Ads — all via Windsor.ai REST API.
+  Publisher buys (Architectural Digest, Samsung, Inshorts): read live from tabs of the
+  Cheil planning sheet via Windsor's googlesheets connector — see CONFIG.PUBLISHERS.
+
+  SETUP
+  1. CONFIG.WINDSOR_API_KEY is pre-filled with the key already in use by the
+     D2C tracker. Replace it if you rotate keys.
+  2. Open in any browser. No server needed.
+  3. If a browser blocks the fetch on file://, run:  npx serve .
+
+  METRIC DEFINITIONS — see the Methodology tab in the dashboard itself.
+  Key ones: DV360 Spend = revenue_advertiser (NOT media cost).
+            Views: DV360 = TrueView views, Meta = ThruPlays, LinkedIn = Video views.
+            Reach is pulled per range WITHOUT a date dimension so the platform
+            de-duplicates. Cross-platform reach is a SUM, not de-duplicated.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler Branding Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
+<style>
+:root{color-scheme:light;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f1f5;color:#1A1A2E;font-size:12px;}
+
+/* Header */
+.hdr{background:#000;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:8px;position:sticky;top:0;z-index:50;flex-wrap:wrap;}
+.hdr-l{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.redbar{width:4px;height:26px;background:#CC0000;border-radius:2px;flex-shrink:0;}
+.hdr-title{font-size:15px;font-weight:900;letter-spacing:2px;}
+.hdr-sub{font-size:10px;color:#8a93b2;margin-top:1px;letter-spacing:.4px;}
+.hdr-r{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.range-select{background:#2a2d45;color:#fff;border:none;padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;height:32px;min-width:150px;}
+.range-select option{background:#1A1A2E;color:#fff;}
+.custom-dates{display:flex;align-items:center;gap:4px;}
+.custom-dates input{background:#2a2d45;border:1px solid #3a3f60;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;}
+.custom-dates input::-webkit-calendar-picker-indicator{filter:invert(1);}
+.btn{background:#CC0000;color:#fff;border:none;padding:6px 15px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;height:32px;white-space:nowrap;}
+.btn:hover{background:#aa0000;}
+.btn:disabled{background:#555;cursor:not-allowed;}
+.btn.dark{background:#2a2d45;}
+.btn.dark:hover{background:#3a3f60;}
+
+/* Loader */
+.loading{position:fixed;inset:0;background:rgba(240,241,245,.92);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px;}
+.spinner{width:28px;height:28px;border:3px solid #ddd;border-top-color:#CC0000;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#1A1A2E;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+.loadtrack{width:190px;height:4px;background:#e2e4ec;border-radius:3px;overflow:hidden;}
+.loadtrack i{display:block;height:100%;width:0;background:#CC0000;border-radius:3px;transition:width .25s ease;}
+.hidden{display:none!important;}
+
+/* Tabs */
+.tabs-bar{background:#fff;border-bottom:2px solid #eee;display:flex;justify-content:center;padding:0 14px;overflow-x:auto;scrollbar-width:none;position:sticky;top:53px;z-index:40;}
+.tabs-bar::-webkit-scrollbar{display:none;}
+.tbbtn{padding:10px 15px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;flex-shrink:0;transition:.15s;}
+.tbbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;}
+.tbbtn:hover:not(.active){color:#555;}
+.tab{display:none;padding:14px 18px 30px;}
+.tab.active{display:block;}
+
+/* Section headings */
+.sec{margin-bottom:26px;}
+.sec-hdr{display:flex;align-items:baseline;gap:10px;margin:0 0 12px;padding-bottom:7px;border-bottom:2px solid #e6e6ec;}
+.sec-n{font-size:10px;font-weight:900;color:#CC0000;letter-spacing:1px;}
+.sec-t{font-size:13px;font-weight:800;color:#1A1A2E;letter-spacing:.3px;}
+.sec-note{font-size:10px;color:#999;margin-left:auto;font-style:italic;}
+
+/* KPI strip */
+.sstrip{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
+.scard{background:#fff;border-radius:8px;padding:14px 12px;box-shadow:0 1px 4px rgba(0,0,0,.06);text-align:center;border-top:3px solid #1A1A2E;}
+.scard.rev{border-top-color:#CC0000;}
+.scard.soft{border-top-color:#c9ccd8;}
+.scard .lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+.scard .val{font-size:21px;font-weight:800;color:#1A1A2E;line-height:1;}
+.scard .sub{font-size:9px;color:#aaa;margin-top:4px;}
+.caveat{color:#CC0000;font-weight:700;cursor:help;}
+
+/* Tables */
+.tblwrap{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;}
+.tblscroll{overflow-x:auto;}
+.dt{width:100%;border-collapse:collapse;font-size:11px;}
+.dt th{background:#f5f6fa;padding:8px 10px;text-align:right;font-size:9px;color:#7c8296;font-weight:800;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:1px solid #e8e8ee;position:sticky;top:0;z-index:2;}
+.dt th:first-child{text-align:left;left:0;z-index:4;background:#f5f6fa;}
+.dt td{padding:7px 10px;text-align:right;border-bottom:1px solid #f4f4f8;white-space:nowrap;color:#3a3f52;}
+.dt td:first-child{text-align:left;font-weight:700;color:#1A1A2E;position:sticky;left:0;background:#fff;z-index:1;max-width:290px;overflow:hidden;text-overflow:ellipsis;}
+.dt tbody tr:hover td{background:#fafbff;}
+.dt tbody tr:hover td:first-child{background:#fafbff;}
+.dt tr.tot td{background:#f0f0f4!important;font-weight:800;color:#1A1A2E;border-top:2px solid #e0e0e8;}
+.dt .num0{font-variant-numeric:tabular-nums;}
+.pdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0;}
+.mkchip{display:inline-block;padding:1px 7px;border-radius:9px;font-size:9px;font-weight:800;letter-spacing:.4px;}
+.mk-P0{background:#fdecec;color:#CC0000;}
+.mk-P1{background:#eaf1fd;color:#1a5fb4;}
+.mk-NA{background:#f2f2f2;color:#999;}
+.bar{position:relative;background:#f0f1f6;border-radius:3px;height:7px;overflow:hidden;min-width:44px;}
+.bar i{position:absolute;left:0;top:0;height:100%;border-radius:3px;}
+
+/* Charts */
+.chart-card{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px;}
+.chart-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap;}
+.chart-hdr h3{font-size:11px;font-weight:800;letter-spacing:.3px;}
+.mpills{display:flex;gap:4px;flex-wrap:wrap;}
+.mpill{background:#f4f5fa;color:#7c8296;border:1px solid #e4e5ee;padding:4px 11px;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;}
+.mpill.active{background:#1A1A2E;color:#fff;border-color:#1A1A2E;}
+.cleg{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;}
+.ctog{background:none;border:1px solid #e4e5ee;border-radius:20px;padding:3px 11px;font-size:10px;font-weight:700;color:#aaa;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.ctog.on{color:#1A1A2E;border-color:#c8cad6;}
+.split2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.split3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+
+/* Platform header band */
+.pband{display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:8px 8px 0 0;color:#fff;font-size:12px;font-weight:800;letter-spacing:.5px;}
+.pb-dv{background:#1A73E8;}
+.pb-mt{background:#1877F2;}
+.pb-li{background:#0A66C2;}
+.pb-3p{background:#6B6F80;}
+.pkpi{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:#e8e9f0;}
+.pkpi div{background:#fff;padding:11px 10px;text-align:center;}
+.pkpi .kl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;}
+.pkpi .kv{font-size:17px;font-weight:800;color:#1A1A2E;margin-top:3px;}
+.pcard{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);overflow:hidden;margin-bottom:14px;}
+
+/* Sub tabs */
+.stabs{display:flex;gap:5px;padding:11px 14px 0;flex-wrap:wrap;}
+.stab{padding:5px 13px;font-size:10.5px;font-weight:700;cursor:pointer;border:1px solid #e4e5ee;border-radius:4px;background:#fff;color:#8b90a3;}
+.stab.active{background:#1A1A2E;color:#fff;border-color:#1A1A2E;}
+.spane{display:none;padding:11px 0 0;}
+.spane.active{display:block;}
+
+/* Asset cards */
+.assets{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px;}
+.acard{border:1px solid #ececf2;border-radius:8px;overflow:hidden;background:#fff;}
+.athumb{width:100%;aspect-ratio:16/9;object-fit:cover;background:#f2f2f6;display:block;}
+.aph{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,#f4f5fa,#e8e9f2);display:flex;align-items:center;justify-content:center;color:#b8bcc9;font-size:10px;font-weight:700;letter-spacing:.5px;text-align:center;padding:8px;}
+.aname{padding:9px 11px 6px;font-size:10.5px;font-weight:800;color:#1A1A2E;line-height:1.35;word-break:break-word;}
+.arows{padding:0 11px 11px;}
+.arow{display:flex;justify-content:space-between;font-size:10px;padding:2.5px 0;border-bottom:1px solid #f6f6fa;}
+.arow:last-child{border-bottom:none;}
+.arow span{color:#999;}
+.arow b{color:#1A1A2E;font-variant-numeric:tabular-nums;}
+
+/* Notices */
+.notice{border-radius:8px;padding:11px 15px;font-size:11px;line-height:1.55;margin-bottom:14px;}
+.n-warn{background:#fff8e6;border:1px solid #f0d9a0;color:#7a5c00;}
+.n-err{background:#fdeeee;border:1px solid #f0b8b8;color:#8c1d1d;}
+.n-info{background:#eef3fb;border:1px solid #c6d6ee;color:#26476f;}
+.n-flat{background:#fff;border:1px solid #e8e8ee;color:#555;}
+
+/* Health strip */
+.health{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+.hchip{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #e8e8ee;border-radius:20px;padding:4px 12px;font-size:10px;font-weight:700;color:#555;}
+.hdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.hd-ok{background:#1a9e5c;} .hd-warn{background:#e0a000;} .hd-err{background:#CC0000;} .hd-idle{background:#c8cad6;}
+
+/* Methodology */
+.meth{background:#fff;border-radius:8px;padding:20px 24px;box-shadow:0 1px 4px rgba(0,0,0,.06);max-width:1050px;}
+.meth h3{font-size:12px;font-weight:900;color:#1A1A2E;margin:20px 0 8px;letter-spacing:.4px;text-transform:uppercase;}
+.meth h3:first-child{margin-top:0;}
+.meth p{font-size:11.5px;line-height:1.7;color:#464b5e;margin-bottom:9px;}
+.meth code{background:#f4f5fa;padding:1px 5px;border-radius:3px;font-size:10.5px;color:#CC0000;}
+.meth table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0 14px;}
+.meth th{background:#f5f6fa;padding:7px 10px;text-align:left;font-size:9.5px;color:#7c8296;font-weight:800;text-transform:uppercase;border-bottom:1px solid #e8e8ee;}
+.meth td{padding:7px 10px;border-bottom:1px solid #f4f4f8;color:#464b5e;vertical-align:top;}
+.meth ul{margin:0 0 12px 18px;} .meth li{font-size:11.5px;line-height:1.7;color:#464b5e;}
+
+@media(max-width:1100px){.sstrip{grid-template-columns:repeat(3,1fr);}.assets{grid-template-columns:repeat(2,1fr);}.split3{grid-template-columns:1fr;}}
+@media(max-width:760px){.sstrip{grid-template-columns:repeat(2,1fr);}.split2{grid-template-columns:1fr;}.pkpi{grid-template-columns:repeat(2,1fr);}.assets{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="redbar"></div>
+    <div>
+      <div class="hdr-title">KOHLER</div>
+      <div class="hdr-sub">BRANDING TRACKER &nbsp;·&nbsp; MEGA CAMPAIGN</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <select class="range-select" id="rangeSel" onchange="onRangeChange()">
+      <option value="yesterday">Yesterday</option>
+      <option value="7d">Last 7 Days</option>
+      <option value="14d">Last 14 Days</option>
+      <option value="30d">Last 30 Days</option>
+      <option value="this-month">This Month</option>
+      <option value="last-month">Last Month</option>
+      <option value="campaign" selected>Campaign to Date</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <div class="custom-dates hidden" id="customDates">
+      <input type="date" id="d1"> <span style="color:#888;font-size:10px;">–</span> <input type="date" id="d2">
+    </div>
+    <button class="btn" id="refreshBtn" onclick="load()">&#8635; Refresh</button>
+    <button class="btn dark" onclick="exportXlsx()">&#8681; Export</button>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tbbtn active" data-tab="summary" onclick="switchTab('summary',this)">Summary</button>
+  <button class="tbbtn" data-tab="dv360" onclick="switchTab('dv360',this)">DV360</button>
+  <button class="tbbtn" data-tab="meta" onclick="switchTab('meta',this)">Meta</button>
+  <button class="tbbtn" data-tab="linkedin" onclick="switchTab('linkedin',this)">LinkedIn</button>
+  <button class="tbbtn" data-tab="ad" onclick="switchTab('ad',this)">Architectural Digest</button>
+  <button class="tbbtn" data-tab="samsung" onclick="switchTab('samsung',this)">Samsung</button>
+  <button class="tbbtn" data-tab="inshorts" onclick="switchTab('inshorts',this)">Inshorts</button>
+  <button class="tbbtn" data-tab="method" onclick="switchTab('method',this)">Methodology</button>
+</div>
+
+<div class="loading hidden" id="loader">
+  <div class="spinner"></div>
+  <p id="loadMsg">0%</p>
+  <div class="loadtrack"><i id="loadBar"></i></div>
+</div>
+
+<!-- ══════════════ SUMMARY ══════════════ -->
+<div class="tab active" id="tab-summary">
+  <div id="errBox"></div>
+  <div id="unmappedBox"></div>
+  <!-- Health chips and diagnostics stay in the DOM but only surface when a source
+       actually fails, so a clean load shows nothing above section 01. -->
+  <div id="healthStrip" class="health hidden"></div>
+  <details id="diagBox" class="hidden" style="margin-bottom:14px;">
+    <summary style="cursor:pointer;font-size:10.5px;color:#8b90a3;font-weight:700;">Call diagnostics</summary>
+    <div class="tblwrap" style="margin-top:8px;"><div class="tblscroll"><table class="dt" id="diagTbl"></table></div></div>
+  </details>
+
+  <div class="sec">
+    <div class="sec-hdr"><span class="sec-n">01</span><span class="sec-t">Overall</span>
+      <span class="sec-note" id="rangeLabel"></span></div>
+    <div class="sstrip" id="kpiRow1"></div>
+    <div class="sstrip" id="kpiRow2"></div>
+    <div class="chart-card" style="margin-top:12px;">
+      <div class="chart-hdr">
+        <h3 id="trendTitle">Daily Trend</h3>
+        <div class="mpills" id="trendPills"></div>
+      </div>
+      <div style="position:relative;height:210px;width:100%;"><canvas id="trendChart"></canvas></div>
+      <div class="cleg" id="trendToggles"></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hdr"><span class="sec-n">02</span><span class="sec-t">By Platform</span>
+      <span class="sec-note">See the note under the table before quoting Reach or Frequency</span></div>
+    <div class="split2">
+      <div class="chart-card"><div class="chart-hdr"><h3>Spend Share</h3></div>
+        <div style="position:relative;height:190px;"><canvas id="platSpendChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-hdr"><h3>Impressions vs Views</h3></div>
+        <div style="position:relative;height:190px;"><canvas id="platImpChart"></canvas></div></div>
+    </div>
+    <div class="tblwrap"><div class="tblscroll"><table class="dt" id="platTbl"></table></div></div>
+    <div class="notice n-flat" style="margin-top:8px;">
+      <b>On the Reach and Frequency columns.</b> All three platform rows are de-duplicated by the
+      platform across the whole campaign for the selected range, so each row on its own is sound. The
+      Total row is not: it adds those three together, and anyone reached on both YouTube and Meta is
+      counted twice, so true combined reach is lower and the Total Frequency reads correspondingly
+      low. Quote a platform row; treat the Total as a ceiling.
+      <br><br><b>On the publisher rows.</b> Architectural Digest, Samsung and Inshorts are bought on
+      impressions and report spend, impressions and clicks only — no reach, no views. They are included
+      in Spend, Impressions, Clicks, CTR and CPM, and deliberately excluded from Reach, Frequency, Views,
+      VTR and CPV, which are computed across the video platforms alone. So the Total row's VTR is video
+      VTR, not views over every impression on the plan.
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-hdr"><span class="sec-n">03</span><span class="sec-t">By Market</span>
+      <span class="sec-note">Market from the Cheil naming map — see Methodology</span></div>
+    <div class="notice n-flat" style="margin-bottom:12px;">
+      No Reach or Frequency by market. DV360 de-duplicates reach across the whole campaign, and that
+      one campaign runs in both P0 and P1, so there is no DV360 reach to attribute to a market
+      — and a column carrying only Meta and LinkedIn would read as a total it is not.
+    </div>
+    <div class="split2">
+      <div class="chart-card"><div class="chart-hdr"><h3>Spend by Market</h3></div>
+        <div style="position:relative;height:190px;"><canvas id="mktSpendChart"></canvas></div></div>
+      <div class="chart-card"><div class="chart-hdr"><h3>Market × Platform Spend</h3></div>
+        <div style="position:relative;height:190px;"><canvas id="mktPlatChart"></canvas></div></div>
+    </div>
+    <div class="tblwrap"><div class="tblscroll"><table class="dt" id="mktTbl"></table></div></div>
+    <div style="height:12px;"></div>
+    <div class="tblwrap"><div class="tblscroll"><table class="dt" id="mktPlatTbl"></table></div></div>
+  </div>
+</div>
+
+<!-- ══════════════ DV360 ══════════════ -->
+<div class="tab" id="tab-dv360">
+  <div class="pcard">
+    <div class="pband pb-dv"><span>DV360 &nbsp;·&nbsp; Kohler India</span><span style="margin-left:auto;font-weight:600;font-size:10px;opacity:.85;">Spend = Revenue (advertiser currency)</span></div>
+    <div class="pkpi" id="dvKpi"></div>
+    <div class="notice n-flat" style="margin:12px 14px 0;">
+      Reach is pulled at campaign level, so DV360 has de-duplicated it across every line item &mdash;
+      a viewer hit by both YouTube Skippable and Pinterest is counted once. Frequency is impressions
+      over that reach. Because the de-duplication happens across the whole campaign, reach cannot be
+      broken out by line item or by market; those tables carry no Reach column rather than a wrong one.
+    </div>
+    <div class="stabs">
+      <button class="stab active" onclick="subTab('dv','li',this)">Line Item</button>
+      <button class="stab" onclick="subTab('dv','yt',this)">YouTube Assets</button>
+    </div>
+    <div class="spane active" id="dv-li"><div class="tblscroll"><table class="dt" id="dvLiTbl"></table></div></div>
+    <div class="spane" id="dv-yt"><div id="dvYtNote"></div><div class="assets" id="dvYtAssets"></div><div class="tblscroll"><table class="dt" id="dvYtTbl"></table></div></div>
+  </div>
+  <div class="chart-card"><div class="chart-hdr"><h3>Video Drop-off by Line Item</h3>
+    <span style="font-size:10px;color:#999;">Share of video starts reaching each quartile</span></div>
+    <div style="position:relative;height:230px;"><canvas id="dvQuartChart"></canvas></div></div>
+</div>
+
+<!-- ══════════════ META ══════════════ -->
+<div class="tab" id="tab-meta">
+  <div class="pcard">
+    <div class="pband pb-mt"><span>Meta Ads &nbsp;·&nbsp; Kohler India</span><span style="margin-left:auto;font-weight:600;font-size:10px;opacity:.85;">Views = ThruPlays</span></div>
+    <div class="pkpi" id="mtKpi"></div>
+    <div class="stabs">
+      <button class="stab active" onclick="subTab('mt','cp',this)">Campaign</button>
+      <button class="stab" onclick="subTab('mt','as',this)">Ad Set</button>
+      <button class="stab" onclick="subTab('mt','ad',this)">Ads / Assets</button>
+    </div>
+    <div class="spane active" id="mt-cp"><div class="tblscroll"><table class="dt" id="mtCpTbl"></table></div></div>
+    <div class="spane" id="mt-as"><div class="tblscroll"><table class="dt" id="mtAsTbl"></table></div></div>
+    <div class="spane" id="mt-ad"><div class="assets" id="mtAdAssets"></div><div class="tblscroll"><table class="dt" id="mtAdTbl"></table></div></div>
+  </div>
+  <div class="chart-card"><div class="chart-hdr"><h3>ThruPlay Rate by Ad</h3>
+    <span style="font-size:10px;color:#999;">ThruPlays and 100% views against impressions</span></div>
+    <div style="position:relative;height:230px;"><canvas id="mtAdChart"></canvas></div></div>
+</div>
+
+<!-- ══════════════ LINKEDIN ══════════════ -->
+<div class="tab" id="tab-linkedin">
+  <div class="pcard">
+    <div class="pband pb-li"><span>LinkedIn Ads &nbsp;·&nbsp; Cheil - Kohler</span><span style="margin-left:auto;font-weight:600;font-size:10px;opacity:.85;">Views = Video views (2s / 50% on screen)</span></div>
+    <div class="pkpi" id="liKpi"></div>
+    <div class="stabs">
+      <button class="stab active" onclick="subTab('li','cp',this)">Campaign</button>
+      <button class="stab" onclick="subTab('li','cr',this)">Creatives / Assets</button>
+    </div>
+    <div class="spane active" id="li-cp"><div class="tblscroll"><table class="dt" id="liCpTbl"></table></div></div>
+    <div class="spane" id="li-cr"><div class="assets" id="liCrAssets"></div><div class="tblscroll"><table class="dt" id="liCrTbl"></table></div></div>
+  </div>
+  <div class="chart-card"><div class="chart-hdr"><h3>Video Drop-off by Creative</h3>
+    <span style="font-size:10px;color:#999;">Share of impressions reaching each quartile</span></div>
+    <div style="position:relative;height:230px;"><canvas id="liQuartChart"></canvas></div></div>
+</div>
+
+<!-- ══════════════ THIRD PARTY ══════════════ -->
+<!-- ══════════════ PUBLISHER TABS ══════════════ -->
+<!-- One block per publisher, built by renderPublishers() from CONFIG.PUBLISHERS. -->
+<div class="tab" id="tab-ad"><div id="pub-ad"></div></div>
+<div class="tab" id="tab-samsung"><div id="pub-samsung"></div></div>
+<div class="tab" id="tab-inshorts"><div id="pub-inshorts"></div></div>
+
+<!-- ══════════════ METHODOLOGY ══════════════ -->
+<div class="tab" id="tab-method">
+  <div class="meth">
+    <h3>What this tracks</h3>
+    <p>The Cheil Kohler Mega Campaign from 1 August 2026 onward, across DV360, Meta and LinkedIn.
+       Numbers are pulled live from Windsor.ai each time the page loads or Refresh is clicked &mdash;
+       nothing is cached or hard-coded, so a figure here is whatever the platform reported at pull time.</p>
+
+    <h3>Metric definitions</h3>
+    <table>
+      <tr><th>Metric</th><th>DV360</th><th>Meta</th><th>LinkedIn</th></tr>
+      <tr><td><b>Spend</b></td><td><code>revenue_advertiser</code> &mdash; billable revenue, <i>not</i> media cost</td><td><code>spend</code></td><td><code>spend</code></td></tr>
+      <tr><td><b>Impressions</b></td><td><code>impressions</code></td><td><code>impressions</code></td><td><code>impressions</code></td></tr>
+      <tr><td><b>Reach</b></td><td><code>unique_reach_impression_reach</code></td><td><code>reach</code></td><td><code>approximate_unique_impressions</code></td></tr>
+      <tr><td><b>Frequency</b></td><td>Impressions &divide; Reach</td><td>Impressions &divide; Reach</td><td>Impressions &divide; Reach</td></tr>
+      <tr><td><b>Views</b></td><td><code>trueview_views</code>, falling back to <code>complete_views_video</code> where TrueView reports zero</td><td><code>video_thruplay_watched_actions</code> (ThruPlays)</td><td><code>video_views</code> (2s at 50% on screen)</td></tr>
+      <tr><td><b>VTR</b></td><td colspan="3">Views &divide; Impressions</td></tr>
+      <tr><td><b>CTR</b></td><td colspan="3">Clicks &divide; Impressions</td></tr>
+      <tr><td><b>CPM</b></td><td colspan="3">Spend &divide; Impressions &times; 1,000 &mdash; computed here, not taken from the platform</td></tr>
+      <tr><td><b>CPV</b></td><td colspan="3">Spend &divide; Views</td></tr>
+    </table>
+
+    <h3>Three things to know before quoting a number</h3>
+    <p><b>1. Reach anywhere above campaign level is a sum, not an audience.</b> Meta and LinkedIn each
+       return one de-duplicated reach per campaign for the selected range, and those figures are sound.
+       Two things break above that. A person reached on both YouTube and Meta is counted twice in any
+       combined figure &mdash; and DV360 reports reach per line item without de-duplicating across them,
+       so even the DV360-only figure double-counts anyone hit by both YouTube Skippable and Pinterest.
+       So the DV360 row, the market rows and the Total row are all ceilings. Frequency inherits the same
+       inflation and reads lower than reality; on a short range it can drop below 1, which is the
+       arithmetic showing its working rather than a bug. Both carry a red marker in the KPI strip. If you
+       need a defensible reach number, quote it at campaign level for Meta or LinkedIn, or at line-item
+       level for DV360 &mdash; never the total.</p>
+    <p><b>2. DV360 Views mixes two different events.</b> The Mega Campaign runs TrueView skippable
+       alongside non-skippable Lineup, Masthead, Pinterest and Display. TrueView views only exist on
+       skippable inventory &mdash; the Lineup and Pinterest lines report zero TrueView views while
+       delivering large completed-view counts. Rather than show those lines as having no views at all,
+       this dashboard falls back to completed views where TrueView is zero. Every table also carries a
+       separate Complete Views column so you can see which basis a line is on. A DV360 VTR is therefore
+       not one clean rate; read it by line item, not as a single blended number.</p>
+    <p><b>3. Views are not comparable across platforms.</b> A TrueView view, a ThruPlay and a LinkedIn
+       video view are three different thresholds. The overall VTR and CPV are arithmetic on numbers that
+       do not measure the same thing &mdash; useful for tracking direction week to week, not for judging
+       one platform against another. Compare within a platform.</p>
+
+    <h3>Market mapping</h3>
+    <p>Market comes from the Cheil naming convention, mapped from the reference sheet. Explicit entries
+       are checked first; anything unrecognised falls back to a <code>_P0_</code> / <code>_P1_</code>
+       token search in the name, and if that finds nothing the row lands in <b>Unmapped</b> and a warning
+       appears on the Summary tab. Unmapped spend is never quietly folded into P0 or P1.</p>
+    <table>
+      <tr><th>Platform</th><th>Name</th><th>Market</th></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_AndriodTV_Masthead</td><td>P0</td></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_P0_Display&amp;DMP_LI_Aug'26</td><td>P0</td></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_P0_Pinterest_LI_Aug'26</td><td>P0</td></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_P0_YT_Skippable_LI_Aug'26</td><td>P0</td></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_P1_YT_Skippable_LI_Aug'26</td><td>P1</td></tr>
+      <tr><td>DV360</td><td>Cheil_Kohler_Mega_YTSelected_Lineup_Aug'26</td><td>P0</td></tr>
+      <tr><td>Meta</td><td>010826_Cheil_Kohler_MegaCampaign_RnF_P0_August2026</td><td>P0</td></tr>
+      <tr><td>Meta</td><td>010826_Cheil_Kohler_MegaCampaign_Auction_August2026</td><td>P1</td></tr>
+      <tr><td>LinkedIn</td><td>010826_Cheil_Kohler_MegaCampaign_August2026-Video Views-C-Suite</td><td>P0</td></tr>
+    </table>
+    <p>Note one wrinkle: the DV360 insertion order <code>Cheil_Kohler_Mega_P0_YT_Skippable_Aug'26</code>
+       carries both a P0 and a P1 line item, so market splits are computed at line-item level on DV360, not
+       insertion-order level. The Insertion Order table shows a mixed marker where that happens.</p>
+
+    <h3>How the data is pulled</h3>
+    <ul>
+      <li><b>Reach is a separate call per platform with no date dimension.</b> Windsor returns platform-de-duplicated
+          reach for the whole selected range that way. Summing daily reach rows would inflate it substantially, so
+          reach does not appear in any day-on-day table &mdash; a daily reach column would be wrong.</li>
+      <li><b>DV360 needs its full field list in one call.</b> Trimming fields while keeping TrueView views makes
+          Windsor silently drop the non-YouTube line items, and the spend total comes out low but plausible.
+          The call here is deliberately wide.</li>
+      <li><b>Long ranges are sliced into 10-day chunks</b> and merged, to stay inside Windsor's timeout.</li>
+      <li><b>DV360 YouTube asset names come from a separate TrueView call</b> that cannot be combined with line
+          item or spend, so the YouTube Assets view shows impressions and views only &mdash; no spend column.</li>
+    </ul>
+
+    <h3>Publisher buys</h3>
+    <p>Architectural Digest and Samsung are read live from tabs of the Cheil planning sheet. Windsor
+       surfaces only the first table on each tab &mdash; the day-wise block &mdash; so the Plan vs
+       Achieved block underneath is not machine-readable. Plan targets are therefore held in the
+       dashboard's config and every <i>achieved</i> figure is recomputed from the same live day rows that
+       feed Day on Day, which is why the two can never disagree. Both were reconciled against the sheet's
+       own totals when built: Architectural Digest to the rupee, Samsung to &#8377;735,932.50 against a
+       displayed &#8377;735,933 (the sheet rounds).</p>
+    <p>One parsing trap worth knowing, since it would be invisible if wrong: the Samsung tab writes
+       impressions as <code>98.484</code>, using a dot as a <i>thousands</i> separator, while the budget in
+       that same row is <code>&#8377;49,242.00</code> with a comma for thousands and a dot for decimals.
+       Read naively, impressions come out a thousand times too small and entirely plausible. Integer and
+       currency cells are parsed by different rules here, and the test suite checks both against the
+       sheet totals.</p>
+    <p>These publishers report no reach and no views. They count toward Spend, Impressions, Clicks, CTR
+       and CPM, and are held out of Reach, Frequency, Views, VTR and CPV. Inshorts is configured but has
+       no sheet connected, so it contributes nothing at all.</p>
+
+    <h3>Known gaps</h3>
+    <ul>
+      <li>Inshorts has no data connected &mdash; its tab shows the structure it will take, not a zero.</li>
+      <li>Meta ad-level reach is per-ad and de-duplicated within that ad only. It is shown as reported but not
+          totalled, because summing it across ads double-counts.</li>
+      <li>LinkedIn reach is LinkedIn's own approximation and lags 24&ndash;48 hours; the most recent day often
+          returns null.</li>
+      <li>Meta ad thumbnails come back empty from this account, so the Ads view shows name cards rather than
+          creative previews.</li>
+      <li>The Windsor API key is embedded in this file. Fine for a local file on your machine; if this gets
+          hosted anywhere shared, the key needs to move behind a server-side proxy first.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   CONFIGURATION
+   ═══════════════════════════════════════════════════════════ */
+const CONFIG = {
+  WINDSOR_API_KEY : 'REPLACE_WITH_WINDSOR_API_KEY',
+  WINDSOR_API_BASE: 'https://connectors.windsor.ai',
+
+  DV360_ACCOUNT   : '8394258957',        // Kohler India
+  META_ACCOUNT    : '1542147597124356',  // Kohler India
+  LINKEDIN_ACCOUNT: '519472255',         // Cheil - Kohler
+
+  CAMPAIGN_START  : '2026-08-01',
+
+  // Only campaigns matching this survive. Keeps D2C / lead-gen out of the branding view.
+  BRANDING_MATCH  : /Mega/i,
+
+  /* Publisher buys, read live from tabs of the Cheil planning sheet via Windsor's
+     googlesheets connector. Windsor exposes only the FIRST table on each tab, which is
+     the day-wise block — the Plan vs Achieved block below it is out of reach, so plan
+     targets are held in `plan` here and every "achieved" figure is computed from the
+     live day rows rather than copied from the sheet. That keeps achieved consistent
+     with the Day on Day table by construction.
+     To wire Inshorts: put its gid in `account` and set the four `cols` names. */
+  PUBLISHERS: [
+    { key:'ad', label:'Architectural Digest', color:'#C2185B', market:'PAN India',
+      account:'1FhrAuY46-cpKhNFHI_4MUsewKSPL75PwDS7cBhFQIL4-802227814',
+      cols:{ date:'date', label:'order', impressions:'ad_server_impressions',
+             clicks:'ad_server_clicks', spend:'spends_' },
+      plan:{ line:'Architectural Digest // Roadblock', audience:'PAN India',
+             placement:'Roadblock on the website with 100% SOV', format:'Static Banners',
+             duration:'15 Days', durationDays:15, creative:'Static', buyType:'CPM',
+             unitCost:450, budget:2025000, impressions:4500000, ctr:0.0010, clicks:4500,
+             audienceSize:null, reachPct:null, reach:null, frequency:'2-3',
+             vtr:null, views:null } },
+
+    { key:'samsung', label:'Samsung', color:'#E07B00', market:'P0',
+      account:'1FhrAuY46-cpKhNFHI_4MUsewKSPL75PwDS7cBhFQIL4-1637753915',
+      cols:{ date:'day', label:null, impressions:'impressions',
+             clicks:'clicks', spend:'budget_delivered' },
+      plan:{ line:'Samsung // Home Screen Masthead',
+             audience:'P0 Markets · 55-inch and above Smart TVs · high-income households consuming Home & Lifestyle content',
+             placement:'1st Screen (Static + Wide Banner)', format:'Display + Video',
+             duration:'60 Days', durationDays:60, creative:'20s', buyType:'CPM',
+             unitCost:500, budget:2735526, impressions:5471053, ctr:0.0015, clicks:8207,
+             audienceSize:6838816, reachPct:0.10, reach:683882, frequency:8,
+             vtr:null, views:null } },
+
+    { key:'inshorts', label:'Inshorts', color:'#6D7B8D', market:'',
+      account:'', cols:{}, plan:null }
+  ],
+
+  /* Creative artwork for the YouTube assets.
+     Windsor's DV360 connector exposes no thumbnail URL and no YouTube video ID — the
+     only identifier it returns is the ad name — so artwork cannot be pulled
+     automatically. Fill this in once per film and the stills render on the DV360
+     YouTube Assets view. Two accepted forms:
+        'Piano' : 'dQw4w9WgXcQ'                       ← a YouTube video ID
+        'Piano' : 'https://…/piano-still.jpg'         ← any direct image URL
+     Keys are matched case-insensitively against the film token in the ad name
+     (…_Masthead_Piano_20s → "Piano"). Leave a film out and its card shows a labelled
+     placeholder rather than the wrong picture. */
+  ASSET_IMAGES: {
+    'Spa At Home': '',
+    'Dress'      : '',
+    'Piano'      : '',
+    'Salsa'      : '',
+    'Vase'       : ''
+  }
+};
+
+/* Pull the film name out of a DV360 ad name. The Cheil convention puts it between the
+   placement and the duration: Cheil_Kohler_Mega_AndroidTV_Masthead_Piano_20s → Piano. */
+function filmOf(adName){
+  const keys = Object.keys(CONFIG.ASSET_IMAGES);
+  const flat = String(adName||'').replace(/[_\-]+/g,' ').toLowerCase();
+  // Longest key first so "Spa At Home" wins over any shorter accidental match.
+  const hit = keys.slice().sort((a,b)=>b.length-a.length)
+    .find(k => flat.indexOf(k.toLowerCase()) >= 0);
+  return hit || '';
+}
+/* A dead artwork URL must not leave a broken-image icon on a client surface. */
+function assetImgFail(el){
+  const d = document.createElement('div');
+  d.className = 'aph';
+  d.textContent = 'artwork not found';
+  el.replaceWith(d);
+}
+function assetImage(adName){
+  const film = filmOf(adName);
+  const v = film ? (CONFIG.ASSET_IMAGES[film]||'').trim() : '';
+  if(!v) return '';
+  if(/^https?:\/\//i.test(v)) return v;
+  // Bare value is treated as a YouTube video ID — this thumbnail URL needs no API key.
+  return 'https://i.ytimg.com/vi/'+encodeURIComponent(v)+'/hqdefault.jpg';
+}
+
+/* Market map — explicit first, then a _P0_/_P1_ token fallback, then Unmapped. */
+const MARKET_MAP = {
+  "cheil_kohler_mega_andriodtv_masthead"            : "P0",
+  "cheil_kohler_mega_p0_display&dmp_li_aug'26"      : "P0",
+  "cheil_kohler_mega_p0_pinterest_li_aug'26"        : "P0",
+  "cheil_kohler_mega_p0_yt_skippable_li_aug'26"     : "P0",
+  "cheil_kohler_mega_p1_yt_skippable_li_aug'26"     : "P1",
+  "cheil_kohler_mega_ytselected_lineup_aug'26"      : "P0",
+  "010826_cheil_kohler_megacampaign_rnf_p0_august2026"   : "P0",
+  "010826_cheil_kohler_megacampaign_auction_august2026"  : "P1",
+  "010826_cheil_kohler_megacampaign_august2026-video views-c-suite": "P0"
+};
+function marketOf(name){
+  if(!name) return 'Unmapped';
+  const k = String(name).trim().toLowerCase();
+  if(MARKET_MAP[k]) return MARKET_MAP[k];
+  if(/(^|[_\-\s])p0([_\-\s]|$)/i.test(name)) return 'P0';
+  if(/(^|[_\-\s])p1([_\-\s]|$)/i.test(name)) return 'P1';
+  return 'Unmapped';
+}
+
+/* All three platforms use near-identical blues in their own branding, which makes them
+   indistinguishable in a donut or a stacked bar. Chart colours here are chosen for
+   separation, not brand fidelity, and the same colour is used for that platform
+   everywhere in the dashboard so the legend never has to be re-learned. */
+const PLATFORMS = [
+  { key:'dv360',    label:'DV360',    color:'#1A73E8' },  // blue
+  { key:'meta',     label:'Meta',     color:'#00A0A0' },  // teal
+  { key:'linkedin', label:'LinkedIn', color:'#7B4FA8' },  // purple
+  { key:'ad',       label:'Architectural Digest', color:'#C2185B', publisher:true },
+  { key:'samsung',  label:'Samsung',  color:'#E07B00', publisher:true },
+  { key:'inshorts', label:'Inshorts', color:'#6D7B8D', publisher:true }
+];
+const MARKET_COLOR = { P0:'#CC0000', P1:'#1a5fb4', 'PAN India':'#7A5AA8', Unmapped:'#9aa0b0' };
+/* P0 and P1 first, anything else alphabetically, Unmapped last. */
+function marketOrder(list){
+  const rank = m => m==='P0' ? 0 : m==='P1' ? 1 : m==='Unmapped' ? 3 : 2;
+  return list.slice().sort((a,b) => rank(a)-rank(b) || a.localeCompare(b));
+}
+
+const DV_FIELDS = ['date','account_id','campaign','insertion_order','line_item','impressions','clicks',
+  'revenue_advertiser','trueview_views','complete_views_video','starts_video',
+  'first_quartile_views_video','midpoint_views_video','third_quartile_views_video'];
+/* Reach is dimensioned by campaign, not line item. DV360 de-duplicates within whatever
+   dimension you ask for, so a line-item pull double-counted anyone hit by two line items
+   — Aug 1-17 came to 9,360,115 that way against a true 7,823,627 at campaign level. */
+const DV_REACH_FIELDS = ['account_id','campaign','unique_reach_impression_reach','unique_reach_average_impression_frequency'];
+const DV_YT_FIELDS = ['account_id','trueview_ad','trueview_ad_group','impressions','trueview_views'];
+
+const MT_METRICS = ['spend','impressions','clicks',
+  'video_thruplay_watched_actions_video_view','video_p100_watched_actions_video_view',
+  'video_p25_watched_actions_video_view','video_p50_watched_actions_video_view','video_p75_watched_actions_video_view'];
+const MT_DAY_FIELDS   = ['date','account_id','campaign'].concat(MT_METRICS);
+const MT_CAMP_FIELDS  = ['account_id','campaign','reach','frequency'].concat(MT_METRICS);
+const MT_AD_FIELDS    = ['account_id','campaign','adset_name','ad_name','reach'].concat(MT_METRICS);
+
+const LI_METRICS = ['spend','impressions','clicks','video_views','video_completions',
+  'quartile_1','quartile_2','quartile_3'];
+const LI_DAY_FIELDS  = ['date','account_id','campaign'].concat(LI_METRICS);
+const LI_CAMP_FIELDS = ['account_id','campaign','approximate_unique_impressions'].concat(LI_METRICS);
+const LI_CR_FIELDS   = ['account_id','campaign','creative_id','share_type','creative_thumbnail'].concat(LI_METRICS);
+
+/* ═══════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════ */
+const N = v => { const n = parseFloat(String(v==null?0:v).replace(/[₹,\s%]/g,'')); return isFinite(n)?n:0; };
+
+/* The planning sheet mixes number conventions, sometimes in the same row.
+   Samsung impressions arrive as "98.484" meaning 98,484 — a dot used as a THOUSANDS
+   separator — while the budget in that same row is "₹49,242.00" with a comma for
+   thousands and a dot for decimals. Reading "98.484" with parseFloat understates
+   impressions by 1000x, silently and plausibly. So integer-valued and money-valued
+   cells get different parsers, and both are reconciled against the sheet's own totals
+   in the test suite. */
+const sheetInt = v => {           // every separator is a thousands separator
+  const d = String(v==null?'':v).replace(/[^0-9]/g,'');
+  return d ? parseInt(d,10) : 0;
+};
+const sheetMoney = v => {         // comma = thousands, dot = decimal point
+  const t = String(v==null?'':v).replace(/[^0-9.,]/g,'').replace(/,/g,'');
+  const n = parseFloat(t);
+  return isFinite(n) ? n : 0;
+};
+const isSheetDate = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s||'').trim());
+const num  = (v,d=0) => (v==null||!isFinite(v)) ? '—' : Number(v).toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
+const inr  = v => (v==null||!isFinite(v)) ? '—' : '₹'+Number(Math.round(v)).toLocaleString('en-IN');
+const inr2 = v => (v==null||!isFinite(v)) ? '—' : '₹'+Number(v).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct  = (v,d=2) => (v==null||!isFinite(v)) ? '—' : (v*100).toFixed(d)+'%';
+const cr   = v => { if(v==null||!isFinite(v)) return '—';
+  if(Math.abs(v)>=1e7) return '₹'+(v/1e7).toFixed(2)+' Cr';
+  if(Math.abs(v)>=1e5) return '₹'+(v/1e5).toFixed(2)+' L';
+  return inr(v); };
+const cmpct = v => { if(v==null||!isFinite(v)) return '—';
+  if(Math.abs(v)>=1e7) return (v/1e7).toFixed(2)+' Cr';
+  if(Math.abs(v)>=1e5) return (v/1e5).toFixed(2)+' L';
+  if(Math.abs(v)>=1e3) return (v/1e3).toFixed(1)+'K';
+  return num(v); };
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const div = (a,b) => (b && isFinite(b) && b!==0) ? a/b : null;
+const iso = d => d.toISOString().slice(0,10);
+
+function mkChip(m){ const c = (m==='P0'||m==='P1')?m:'NA'; return '<span class="mkchip mk-'+c+'">'+esc(m)+'</span>'; }
+
+/* Cheil names are long and repeat the same prefix on every row. Strip the parts that
+   carry no information at this grain so chart axes and cards stay readable. Full names
+   remain in the tables and in the Excel export. */
+function shortName(s){
+  return String(s||'')
+    .replace(/^010826_Cheil_Kohler_MegaCampaign_/i,'')
+    .replace(/^Cheil_Kohler_Mega_/i,'')
+    .replace(/_?Aug(ust)?'?26$/i,'')
+    .replace(/_?August2026/gi,'')
+    .replace(/-?Video Views-Prospecting-?/i,'')
+    .replace(/-?Video Views-?/i,'')
+    .replace(/_LI$/i,'')
+    .replace(/[_]+/g,' ')
+    .replace(/\s{2,}/g,' ')
+    .replace(/^[\s\-–]+|[\s\-–]+$/g,'') || String(s||'');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   WINDSOR FETCH
+   ═══════════════════════════════════════════════════════════ */
+const HEALTH = [];
+function noteHealth(label, state, detail){ HEALTH.push({label,state,detail}); }
+
+/* Windsor caches results server-side keyed on the full query string. An earlier build
+   appended a _ts=Date.now() cache-buster to every URL, which forced a cache MISS on
+   every single call. Meta and LinkedIn are fast enough to absorb that; DV360 runs a
+   report job on a miss and takes well over a minute, so it timed out every time and
+   the tab rendered empty. The buster is now opt-in via the Hard refresh toggle. */
+const HARD_REFRESH = false;   // never bust Windsor's cache — that is what broke DV360
+const CALL_LOG = [];
+
+function buildUrl({connector, accounts, fields, date_from, date_to}){
+  let url = CONFIG.WINDSOR_API_BASE+'/'+connector+'?api_key='+CONFIG.WINDSOR_API_KEY+'&fields='+fields.join(',');
+  if(date_from) url += '&date_from='+date_from;
+  if(date_to)   url += '&date_to='+date_to;
+  (accounts||[]).forEach(a => { url += '&account_id='+encodeURIComponent(a); });
+  if(HARD_REFRESH) url += '&_ts='+Date.now();
+  return url;
+}
+
+/* DV360 can take over a minute on a cold cache, so the timeout is generous and a
+   failed call is retried: the first attempt warms Windsor's cache even when it times
+   out, so attempt two usually returns fast. */
+async function wFetch(opts){
+  const url = buildUrl(opts);
+  const label = opts.connector+' ['+opts.fields.length+'f'+(opts.date_from?' '+opts.date_from+'→'+opts.date_to:'')+']';
+  const ATTEMPTS = opts.attempts || 3;
+  let lastErr;
+  for(let i=1; i<=ATTEMPTS; i++){
+    const t0 = Date.now();
+    try{
+      const resp = await fetch(url, {signal: AbortSignal.timeout(opts.timeout || 120000)});
+      const ms = Date.now()-t0;
+      if(!resp.ok){
+        const body = await resp.text().catch(()=> '');
+        throw new Error('HTTP '+resp.status+(body ? ' — '+body.slice(0,200) : ''));
+      }
+      const text = await resp.text();
+      let json;
+      try{ json = JSON.parse(text); }
+      catch(e){ throw new Error('non-JSON response — '+text.slice(0,200)); }
+      if(json && json.error) throw new Error(String(json.error).slice(0,240));
+      const rows = Array.isArray(json) ? json : (json.data || json.result || []);
+      if(opts.run===undefined||opts.run===RUN_ID) CALL_LOG.push({label, attempt:i, ms, rows:rows.length, ok:true});
+      return rows;
+    }catch(err){
+      const ms = Date.now()-t0;
+      lastErr = err;
+      const timedOut = /timeout|abort/i.test(err.name+' '+err.message);
+      if(opts.run===undefined||opts.run===RUN_ID) CALL_LOG.push({label, attempt:i, ms, rows:0, ok:false,
+        err: timedOut ? 'timed out after '+Math.round(ms/1000)+'s' : err.message});
+      if(i < ATTEMPTS) await new Promise(r => setTimeout(r, 1500*i));
+    }
+  }
+  throw lastErr;
+}
+
+/* Windsor rate-limits and its slower connectors degrade badly under parallel load.
+   The earlier build fired eleven requests at once. This caps concurrency. */
+async function pool(tasks, limit){
+  const out = new Array(tasks.length);
+  let next = 0;
+  async function worker(){
+    while(next < tasks.length){
+      const i = next++;
+      out[i] = await tasks[i]();
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(limit, tasks.length)}, worker));
+  return out;
+}
+
+/* Chunking is now a last resort. Each extra chunk is another cold-cache report job on
+   DV360, so a 10-day chunk size made a 17-day range twice as likely to time out as a
+   single call. Ranges up to 31 days go in one request. */
+async function wFetchChunked(opts){
+  const CHUNK = 31;
+  const s = new Date(opts.date_from), e = new Date(opts.date_to);
+  const days = Math.round((e-s)/86400000)+1;
+  if(days <= CHUNK) return wFetch(opts);
+  const chunks=[]; let cur=new Date(s);
+  while(cur<=e){
+    const ce = new Date(Math.min(cur.getTime()+(CHUNK-1)*86400000, e.getTime()));
+    chunks.push({from:iso(cur), to:iso(ce)});
+    cur = new Date(ce.getTime()+86400000);
+  }
+  const out = await pool(chunks.map(c => () =>
+    wFetch(Object.assign({}, opts, {date_from:c.from, date_to:c.to}))), 2);
+  return [].concat.apply([], out);
+}
+
+/* Windsor's REST API ignores the account_id request parameter — asking for one ad
+   account returns EVERY account connected to that connector. Verified 2026-08-18:
+   a LinkedIn call scoped to 519472255 came back with the Kohler campaign plus all 36
+   campaigns from the SB-EDS account. So the account has to be requested as a FIELD and
+   enforced here, on every row, for every connector. The campaign-name filter alone is
+   not a safeguard — it only ever worked by luck of naming. */
+const SCOPE_DROPS = [];
+function scopeRows(label, rows, acct, run){
+  let dropped = 0;
+  const kept = rows.filter(r => {
+    if(!('account_id' in r) || r.account_id == null || r.account_id === '') return true;
+    if(String(r.account_id).trim() === String(acct).trim()) return true;
+    dropped++; return false;
+  });
+  // Same stale-run guard as the error and call logs: a superseded load must not
+  // append to the live diagnostics, or one drop gets reported once per abandoned run.
+  if(dropped && (run === undefined || run === RUN_ID)){
+    SCOPE_DROPS.push(label+' — '+dropped+' row'+(dropped>1?'s':'')+' from other ad accounts');
+  }
+  return kept;
+}
+
+/* Wraps a pull so one dead source never blanks the whole dashboard. */
+let DONE_COUNT = 0, TOTAL_COUNT = 0;
+/* Progress is reported as a percentage of the pulls finished. It only ever moves
+   forward, and it reaches 100 only once every call has settled. */
+function setProgress(p){
+  const n = Math.max(0, Math.min(100, p|0));
+  const el = document.getElementById('loadMsg');
+  if(el) el.textContent = n + '%';
+  const bar = document.getElementById('loadBar');
+  if(bar) bar.style.width = n + '%';
+}
+async function safePull(label, fn, run){
+  // A superseded run must not write its health chips or errors into the live state,
+  // or a single failure gets reported once per abandoned run.
+  const live = () => run === undefined || run === RUN_ID;
+  try{
+    const rows = await fn();
+    if(live()) noteHealth(label, rows.length ? 'ok' : 'warn', rows.length+' rows');
+    return rows;
+  }catch(err){
+    // Distinguish our own abort from an upstream error that merely says "timeout".
+    const aborted = err.name === 'TimeoutError' || err.name === 'AbortError';
+    const msg = aborted
+      ? 'no response from Windsor within 2 minutes, across 3 attempts'
+      : err.message;
+    if(live()){ noteHealth(label, 'err', msg); ERRORS.push(label+' — '+msg); }
+    return [];
+  }finally{
+    if(live()){
+      DONE_COUNT++;
+      setProgress(TOTAL_COUNT ? Math.round(DONE_COUNT / TOTAL_COUNT * 100) : 0);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DATE RANGE
+   ═══════════════════════════════════════════════════════════ */
+function currentRange(){
+  const sel = document.getElementById('rangeSel').value;
+  const today = new Date(); today.setHours(12,0,0,0);
+  const y = new Date(today.getTime()-86400000);
+  const back = n => new Date(y.getTime()-(n-1)*86400000);
+  let from, to;
+  switch(sel){
+    case 'yesterday':  from=y; to=y; break;
+    case '7d':  from=back(7);  to=y; break;
+    case '14d': from=back(14); to=y; break;
+    case '30d': from=back(30); to=y; break;
+    case 'this-month': from=new Date(today.getFullYear(),today.getMonth(),1); to=y; break;
+    case 'last-month':
+      from=new Date(today.getFullYear(),today.getMonth()-1,1);
+      to  =new Date(today.getFullYear(),today.getMonth(),0); break;
+    case 'custom': {
+      const a=document.getElementById('d1').value, b=document.getElementById('d2').value;
+      if(a && b){ from=new Date(a); to=new Date(b); break; }
+      from=new Date(CONFIG.CAMPAIGN_START); to=y; break;
+    }
+    default: from=new Date(CONFIG.CAMPAIGN_START); to=y;
+  }
+  if(from < new Date(CONFIG.CAMPAIGN_START)) from = new Date(CONFIG.CAMPAIGN_START);
+  if(to < from) to = from;
+  return {from:iso(from), to:iso(to)};
+}
+function onRangeChange(){
+  const custom = document.getElementById('rangeSel').value==='custom';
+  document.getElementById('customDates').classList.toggle('hidden', !custom);
+  if(custom){
+    const r=currentRange();
+    if(!document.getElementById('d1').value) document.getElementById('d1').value=r.from;
+    if(!document.getElementById('d2').value) document.getElementById('d2').value=r.to;
+    return;
+  }
+  load();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════ */
+let ERRORS = [];
+const S = {
+  range:{from:'',to:''},
+  dv:{day:[], reach:[], creative:[], yt:[]},
+  mt:{day:[], camp:[], adset:[], ad:[]},
+  li:{day:[], camp:[], cr:[]},
+  pub:{},         // publisher rows inside the selected date range — feeds Summary + Day on Day
+  pubAll:{}       // every dated publisher row — feeds Plan vs Achieved (flight to date)
+};
+const CHARTS = {};
+function destroyChart(k){ if(CHARTS[k]){ CHARTS[k].destroy(); delete CHARTS[k]; } }
+
+/* Blank metric bucket */
+/* vidImpr / vidSpend hold only the impressions and spend from sources that actually
+   report views (DV360, Meta, LinkedIn). Publisher buys report spend, impressions and
+   clicks but no views at all, so folding their ~60 lakh impressions into the VTR
+   denominator would drag the blended rate down and misrepresent video performance.
+   VTR and CPV therefore run off the video subtotals; Spend, Impressions, Clicks, CTR
+   and CPM run off everything. */
+function bucket(){ return {spend:0, impressions:0, clicks:0, views:0, complete:0, starts:0,
+  q1:0, q2:0, q3:0, reach:null, reachKnown:false, vidImpr:0, vidSpend:0}; }
+function addTo(b, r){
+  b.spend+=r.spend; b.impressions+=r.impressions; b.clicks+=r.clicks;
+  b.views+=r.views; b.complete+=r.complete; b.starts+=r.starts;
+  b.q1+=r.q1; b.q2+=r.q2; b.q3+=r.q3;
+  /* Two shapes flow through here: raw rows (which carry noVideo) and already-summed
+     buckets (which carry vidImpr/vidSpend). Bucket-to-bucket aggregation must carry the
+     video subtotals across, not re-derive them from noVideo — a publisher bucket has no
+     noVideo flag, so re-deriving silently fed its impressions back into the VTR
+     denominator and pulled the overall rate down. */
+  if(r.vidImpr !== undefined){ b.vidImpr += r.vidImpr; b.vidSpend += r.vidSpend; }
+  else if(!r.noVideo){ b.vidImpr += r.impressions; b.vidSpend += r.spend; }
+  return b;
+}
+function derive(b){
+  const vi = b.vidImpr || 0, vs = b.vidSpend || 0;
+  return Object.assign({}, b, {
+    ctr : div(b.clicks, b.impressions),
+    vtr : vi > 0 ? div(b.views, vi) : null,          // video sources only
+    cpm : div(b.spend,  b.impressions)==null ? null : b.spend/b.impressions*1000,
+    cpv : b.views > 0 ? div(vs, b.views) : null,     // video spend over video views
+    cpc : div(b.spend,  b.clicks),
+    // Frequency must use the same population as reach. Publisher impressions have no
+    // reach behind them, so counting them here would inflate the ratio.
+    freq: b.reachKnown ? div(vi, b.reach) : null,
+    compRate: vi > 0 ? div(b.complete, vi) : null
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NORMALISERS — one shape for every platform
+   ═══════════════════════════════════════════════════════════ */
+function dvViews(r){
+  // TrueView views are the definition. Non-TrueView inventory reports 0 there while
+  // still delivering completed views, so fall back rather than show a false zero.
+  const tv = N(r.trueview_views), cv = N(r.complete_views_video);
+  return tv > 0 ? tv : cv;
+}
+function normDv(r){
+  return { platform:'dv360',
+    date: (r.date||'').slice(0,10),
+    campaign: r.campaign||'',
+    group: r.insertion_order||'',
+    item: r.line_item||'',
+    market: marketOf(r.line_item),
+    spend: N(r.revenue_advertiser),
+    impressions: N(r.impressions),
+    clicks: N(r.clicks),
+    views: dvViews(r),
+    trueview: N(r.trueview_views),
+    complete: N(r.complete_views_video),
+    starts: N(r.starts_video),
+    q1: N(r.first_quartile_views_video),
+    q2: N(r.midpoint_views_video),
+    q3: N(r.third_quartile_views_video)
+  };
+}
+function normMt(r){
+  return { platform:'meta',
+    date: (r.date||'').slice(0,10),
+    campaign: r.campaign||'',
+    group: r.adset_name||'',
+    item: r.ad_name||r.adset_name||r.campaign||'',
+    market: marketOf(r.campaign),
+    spend: N(r.spend),
+    impressions: N(r.impressions),
+    clicks: N(r.clicks),
+    views: N(r.video_thruplay_watched_actions_video_view),
+    complete: N(r.video_p100_watched_actions_video_view),
+    starts: N(r.video_p25_watched_actions_video_view),
+    q1: N(r.video_p25_watched_actions_video_view),
+    q2: N(r.video_p50_watched_actions_video_view),
+    q3: N(r.video_p75_watched_actions_video_view),
+    reachRaw: r.reach==null ? null : N(r.reach),
+    freqRaw : r.frequency==null ? null : N(r.frequency)
+  };
+}
+function normLi(r){
+  return { platform:'linkedin',
+    date: (r.date||'').slice(0,10),
+    campaign: r.campaign||'',
+    group: r.campaign||'',
+    item: r.creative_id ? ('Creative '+r.creative_id) : (r.campaign||''),
+    market: marketOf(r.campaign),
+    spend: N(r.spend),
+    impressions: N(r.impressions),
+    clicks: N(r.clicks),
+    views: N(r.video_views),
+    complete: N(r.video_completions),
+    starts: N(r.impressions),
+    q1: N(r.quartile_1), q2: N(r.quartile_2), q3: N(r.quartile_3),
+    reachRaw: r.approximate_unique_impressions==null ? null : N(r.approximate_unique_impressions),
+    thumb: r.creative_thumbnail||'', shareType: r.share_type||''
+  };
+}
+/* One publisher row. `noVideo` marks it as carrying no view data, which keeps it out
+   of the VTR and CPV denominators. Junk rows are dropped by requiring a real date:
+   each sheet tab also contains a totals row with an empty date and the Plan vs
+   Achieved block underneath, whose cells land in these same columns. */
+function normPub(pub, r){
+  const c = pub.cols;
+  return { platform: pub.key,
+    date: String(r[c.date]||'').trim().slice(0,10),
+    campaign: pub.label,
+    group: (c.label && r[c.label]) ? String(r[c.label]).trim() : pub.label,
+    item:  (c.label && r[c.label]) ? String(r[c.label]).trim() : pub.label,
+    market: pub.market || 'Unmapped',
+    spend:       sheetMoney(r[c.spend]),
+    impressions: sheetInt(r[c.impressions]),
+    clicks:      sheetInt(r[c.clicks]),
+    views:0, complete:0, starts:0, q1:0, q2:0, q3:0,
+    reachRaw:null, noVideo:true
+  };
+}
+const pubRowOk = (pub, r) => isSheetDate(r[pub.cols.date]);
+const brandOnly = r => CONFIG.BRANDING_MATCH.test(r.campaign||'') || CONFIG.BRANDING_MATCH.test(r.item||'');
+
+/* ═══════════════════════════════════════════════════════════
+   LOAD
+   ═══════════════════════════════════════════════════════════ */
+/* A DV360 pull can run for two minutes, so changing the date range mid-pull used to
+   leave two loads racing: both wrote to the same state and the error list showed each
+   failure three times over. Every run takes a token; a run that is no longer the
+   current one discards its results instead of rendering them. */
+let RUN_ID = 0;
+async function load(){
+  const myRun = ++RUN_ID;
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true;
+  document.getElementById('loader').classList.remove('hidden');
+  setProgress(0);
+  ERRORS=[]; HEALTH.length=0; CALL_LOG.length=0; SCOPE_DROPS.length=0;
+
+  const r = currentRange(); S.range=r;
+  const dvA=[CONFIG.DV360_ACCOUNT], mtA=[CONFIG.META_ACCOUNT], liA=[CONFIG.LINKEDIN_ACCOUNT];
+
+  /* Ordered cheapest-first so the fast platforms land while DV360 is still working,
+     and pooled so Windsor never sees more than three requests from this page at once. */
+  const P  = (label, fn) => safePull(label, fn, myRun);
+  const W  = o => wFetch(Object.assign({run:myRun}, o));
+  const WC = o => wFetchChunked(Object.assign({run:myRun}, o));
+  const jobs = [
+    () => P('LinkedIn campaign',()=> W({connector:'linkedin', accounts:liA, fields:LI_CAMP_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('LinkedIn daily', () => WC({connector:'linkedin', accounts:liA, fields:LI_DAY_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('LinkedIn creative',()=> W({connector:'linkedin', accounts:liA, fields:LI_CR_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('Meta campaign',  () => W({connector:'facebook', accounts:mtA, fields:MT_CAMP_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('Meta daily',     () => WC({connector:'facebook', accounts:mtA, fields:MT_DAY_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('Meta ads',       () => W({connector:'facebook', accounts:mtA, fields:MT_AD_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('DV360 daily',    () => WC({connector:'dv360', accounts:dvA, fields:DV_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('DV360 reach',    () => W({connector:'dv360', accounts:dvA, fields:DV_REACH_FIELDS, date_from:r.from, date_to:r.to})),
+    () => P('DV360 YT assets',() => W({connector:'dv360', accounts:dvA, fields:DV_YT_FIELDS, date_from:r.from, date_to:r.to}))
+  ];
+  /* One call per configured publisher. The sheet tabs carry no server-side date
+     filtering (Windsor reports no date_filters for them), so the whole tab comes back
+     and the selected range is applied client-side. */
+  const pubJobs = [];
+  /* Offset is captured, never hardcoded. An earlier build assumed ten platform jobs
+     when there are nine, so publisher results were read one slot too far: Samsung came
+     back undefined and rendered as no data. The account guard masked it for
+     Architectural Digest, which made it look like a Samsung-only problem. */
+  const pubOffset = jobs.length;
+  CONFIG.PUBLISHERS.forEach(pub => {
+    if(!pub.account || !pub.cols || !pub.cols.date){
+      noteHealth(pub.label, 'idle', 'no sheet connected yet');
+      return;
+    }
+    const fields = ['account_id', pub.cols.date, pub.cols.impressions,
+                    pub.cols.clicks, pub.cols.spend].concat(pub.cols.label ? [pub.cols.label] : []);
+    pubJobs.push(pub.key);
+    jobs.push(() => P(pub.label, () => W({connector:'googlesheets',
+      accounts:[pub.account], fields:fields})));
+  });
+
+  DONE_COUNT = 0; TOTAL_COUNT = jobs.length;
+  const res = await pool(jobs, 3);
+  if(myRun !== RUN_ID) return;   // a newer load started; this one's results are stale
+  /* Rendering blocks the main thread, so without a yield here the browser never paints
+     the final frame and the counter appears to stall in the eighties. */
+  setProgress(100);
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 90)));
+  /* Ad-set grain is derived from the ad rows rather than pulled separately — one
+     fewer heavy Meta request, and the two always agree by construction. */
+  /* Platform results, mapped back by name rather than by counting positions.
+     Index 2 (DV360 creative) is retired with the Creatives sub-tab. */
+  if(pubOffset !== 9) console.warn('platform job count changed ('+pubOffset+') — check this mapping');
+  const out = [res[6], res[7], [], res[8], res[4], res[3], res[5], res[5], res[1], res[0], res[2]];
+
+  const dvS = rows => scopeRows('DV360',    rows, CONFIG.DV360_ACCOUNT,    myRun);
+  const mtS = rows => scopeRows('Meta',     rows, CONFIG.META_ACCOUNT,     myRun);
+  const liS = rows => scopeRows('LinkedIn', rows, CONFIG.LINKEDIN_ACCOUNT, myRun);
+
+  S.dv.day      = dvS(out[0]).map(normDv).filter(brandOnly);
+  S.dv.reach    = dvS(out[1]);
+  S.dv.creative = out[2];
+  S.dv.yt       = dvS(out[3]);
+  S.mt.day      = mtS(out[4]).map(normMt).filter(brandOnly);
+  S.mt.camp     = mtS(out[5]).map(normMt).filter(brandOnly);
+  S.mt.adset    = mtS(out[6]).map(normMt).filter(brandOnly);
+  S.mt.ad       = mtS(out[7]).map(normMt).filter(brandOnly);
+  /* LinkedIn was the one platform without the campaign filter — an oversight from when
+     the account held only the Mega campaign. That is why SB-EDS spend surfaced as
+     Unmapped once a second LinkedIn account was connected. */
+  S.li.day      = liS(out[8]).map(normLi).filter(brandOnly);
+  S.li.camp     = liS(out[9]).map(normLi).filter(brandOnly);
+  S.li.cr       = liS(out[10]).map(normLi).filter(brandOnly);
+  /* Publisher results sit after the ten platform jobs, in pubJobs order. The
+     googlesheets connector returns rows from EVERY connected sheet on this account —
+     the D2C tracker's tabs included — so scoping by account_id is not optional here. */
+  S.pub = {}; S.pubAll = {};
+  CONFIG.PUBLISHERS.forEach(pub => { S.pub[pub.key] = []; S.pubAll[pub.key] = []; });
+  pubJobs.forEach((key, i) => {
+    const pub = CONFIG.PUBLISHERS.find(x => x.key === key);
+    const raw = scopeRows(pub.label, res[pubOffset + i] || [], pub.account, myRun);
+    const all = raw.filter(x => pubRowOk(pub, x)).map(x => normPub(pub, x));
+    /* Two views of the same rows. The date picker governs the Summary and Day on Day.
+       Plan vs Achieved deliberately ignores it: a plan is written for a whole flight, so
+       measuring three selected days against a 60-day budget reads as a 95% shortfall
+       when nothing is wrong. That comparison is only meaningful flight-to-date. */
+    S.pubAll[key] = all;
+    S.pub[key]    = all.filter(x => x.date >= S.range.from && x.date <= S.range.to);
+  });
+
+  renderAll();
+  document.getElementById('loader').classList.add('hidden');
+  btn.disabled=false;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PLATFORM ROLL-UPS
+   ═══════════════════════════════════════════════════════════ */
+function dvReachTotal(){
+  // One row per campaign, de-duplicated by DV360 across the whole campaign.
+  // Only one branding campaign runs today; if a second is ever added, this sums them
+  // and the cross-campaign overlap would not be removed.
+  let t=0, any=false;
+  S.dv.reach.forEach(r => { const v=N(r.unique_reach_impression_reach); if(v>0){ t+=v; any=true; } });
+  return any ? t : null;
+}
+function platformTotals(){
+  const T = {};
+  PLATFORMS.forEach(p => { T[p.key]=bucket(); });
+
+  S.dv.day.forEach(r => addTo(T.dv360, r));
+  const dvR = dvReachTotal();
+  if(dvR!=null){ T.dv360.reach=dvR; T.dv360.reachKnown=true; }
+
+  // Meta: metrics from the daily series; reach from the no-date campaign call.
+  S.mt.day.forEach(r => addTo(T.meta, r));
+  let mR=0, mAny=false;
+  S.mt.camp.forEach(r => { if(r.reachRaw>0){ mR+=r.reachRaw; mAny=true; } });
+  if(mAny){ T.meta.reach=mR; T.meta.reachKnown=true; }
+
+  S.li.day.forEach(r => addTo(T.linkedin, r));
+  let lR=0, lAny=false;
+  S.li.camp.forEach(r => { if(r.reachRaw>0){ lR+=r.reachRaw; lAny=true; } });
+  if(lAny){ T.linkedin.reach=lR; T.linkedin.reachKnown=true; }
+
+  // Publishers: spend, impressions and clicks only. No reach, no views.
+  CONFIG.PUBLISHERS.forEach(pub => {
+    (S.pub[pub.key]||[]).forEach(r => addTo(T[pub.key], r));
+  });
+
+  const active = PLATFORMS.filter(p => T[p.key].impressions>0 || T[p.key].spend>0);
+  const out = {};
+  active.forEach(p => { out[p.key]=derive(T[p.key]); });
+  return {byPlat:out, active};
+}
+function overallTotals(pt){
+  const o = bucket();
+  let reachSum=0, reachAny=false;
+  Object.keys(pt.byPlat).forEach(k => {
+    const b=pt.byPlat[k]; addTo(o,b);
+    if(b.reachKnown){ reachSum+=b.reach; reachAny=true; }
+  });
+  if(reachAny){ o.reach=reachSum; o.reachKnown=true; }
+  return derive(o);
+}
+function allRows(){
+  const pubRows = CONFIG.PUBLISHERS.reduce((a,p) => a.concat(S.pub[p.key]||[]), []);
+  return [].concat(S.dv.day, S.mt.day, S.li.day, pubRows);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER — shell
+   ═══════════════════════════════════════════════════════════ */
+function renderAll(){
+  const pt = platformTotals();
+  const ov = overallTotals(pt);
+  renderHealth();
+  renderDiag();
+  renderErrors();
+  renderUnmapped();
+  renderKpis(ov, pt);
+  renderTrend();
+  renderPlatformSection(pt, ov);
+  renderMarketSection(pt);
+  renderDv360();
+  renderMeta();
+  renderLinkedIn();
+  renderPublishers();
+}
+
+let PULLED_AT = '';
+function renderHealth(){
+  const map = {ok:'hd-ok', warn:'hd-warn', err:'hd-err', idle:'hd-idle'};
+  PULLED_AT = new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const el = document.getElementById('healthStrip');
+  el.innerHTML = '<span class="hchip"><span class="hdot hd-ok"></span>Pulled '+PULLED_AT+'</span>' +
+    HEALTH.map(h => '<span class="hchip" title="'+esc(h.detail)+'"><span class="hdot '+map[h.state]+'"></span>'+esc(h.label)+'</span>').join('');
+  // Only worth the user's attention when something went wrong.
+  el.classList.toggle('hidden', ERRORS.length === 0);
+}
+function renderDiag(){
+  let h = '<thead><tr><th>Call</th><th>Attempt</th><th>Seconds</th><th>Rows</th><th>Result</th></tr></thead><tbody>';
+  CALL_LOG.forEach(c => {
+    h += '<tr><td>'+esc(c.label)+'</td><td class="num0">'+c.attempt+'</td>'+
+      '<td class="num0">'+(c.ms/1000).toFixed(1)+'</td><td class="num0">'+c.rows+'</td>'+
+      '<td style="text-align:left;color:'+(c.ok?'#1a9e5c':'#CC0000')+'">'+(c.ok?'ok':esc(c.err||'failed'))+'</td></tr>';
+  });
+  /* Rows discarded by the account guard are logged here rather than shown on the
+     dashboard: with other clients connected to the same Windsor connectors, drops
+     happen on every load and a permanent banner would just be noise. */
+  SCOPE_DROPS.forEach(d => {
+    h += '<tr><td>'+esc(d.split(' — ')[0])+' account guard</td><td class="num0">—</td>'+
+      '<td class="num0">—</td><td class="num0">—</td>'+
+      '<td style="text-align:left;color:#7c8296">discarded '+esc(d.split(' — ')[1]||'')+'</td></tr>';
+  });
+  if(!CALL_LOG.length) h += '<tr><td colspan="5" style="text-align:center;color:#bbb;padding:16px;">No calls logged</td></tr>';
+  document.getElementById('diagTbl').innerHTML = h+'</tbody>';
+  const box = document.getElementById('diagBox');
+  box.classList.toggle('hidden', ERRORS.length === 0);
+  box.open = ERRORS.length > 0;
+}
+function renderErrors(){
+  const el=document.getElementById('errBox');
+  if(!ERRORS.length){ el.innerHTML=''; return; }
+  el.innerHTML = '<div class="notice n-err"><b>'+ERRORS.length+' source'+(ERRORS.length>1?'s':'')+
+    ' failed to load.</b> Everything below excludes them, so totals are understated — do not send these numbers on.<ul style="margin:6px 0 0 18px;">'+
+    ERRORS.map(e => '<li>'+esc(e)+'</li>').join('')+'</ul></div>';
+}
+function renderUnmapped(){
+  const un = allRows().filter(r => r.market==='Unmapped');
+  const el = document.getElementById('unmappedBox');
+  if(!un.length){ el.innerHTML=''; return; }
+  const spend = un.reduce((a,b)=>a+b.spend,0);
+  const names = Array.from(new Set(un.map(r => r.item || r.campaign))).slice(0,8);
+  el.innerHTML = '<div class="notice n-warn"><b>'+cr(spend)+' of spend has no market mapping.</b> '+
+    'It is shown as Unmapped, not folded into P0 or P1. Add these to <code>MARKET_MAP</code> in this file:<ul style="margin:6px 0 0 18px;">'+
+    names.map(n => '<li><code>'+esc(n)+'</code></li>').join('')+'</ul></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER — section 1: overall KPIs + trend
+   ═══════════════════════════════════════════════════════════ */
+const CAVEAT_REACH = 'A sum, not a de-duplicated audience. Overlap is removed within a Meta or LinkedIn campaign, but not across platforms, and not across DV360 line items. Treat as a ceiling.';
+const CAVEAT_FREQ  = 'Impressions divided by that summed reach. Because the reach is inflated, this frequency reads lower than reality — and can fall below 1 on short ranges.';
+const CAVEAT_VTR   = 'Video sources only. Architectural Digest, Samsung and Inshorts report no views, so their impressions are excluded from this denominator — including them would drag the rate down against impressions that never had a view to give. Also note a TrueView view, a ThruPlay and a LinkedIn video view are three different thresholds.';
+
+function kpiCard(label, value, sub, cls, caveat){
+  return '<div class="scard '+(cls||'')+'">'+
+    '<div class="lbl">'+esc(label)+(caveat?' <span class="caveat" title="'+esc(caveat)+'">&#9432;</span>':'')+'</div>'+
+    '<div class="val">'+value+'</div>'+
+    (sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>';
+}
+function renderKpis(ov, pt){
+  document.getElementById('rangeLabel').textContent =
+    S.range.from+'  to  '+S.range.to+'   ·   '+pt.active.map(p=>p.label).join(' + ')+
+    (PULLED_AT ? '   ·   pulled '+PULLED_AT : '');
+
+  document.getElementById('kpiRow1').innerHTML =
+    kpiCard('Spend', cr(ov.spend), null, 'rev') +
+    kpiCard('Impressions', cmpct(ov.impressions), null, '') +
+    kpiCard('Reach', cmpct(ov.reach), 'not de-duplicated', 'soft', CAVEAT_REACH) +
+    kpiCard('Frequency', ov.freq==null?'—':num(ov.freq,2), 'Impr / Reach', 'soft', CAVEAT_FREQ) +
+    kpiCard('Views', cmpct(ov.views), null, '');
+
+  document.getElementById('kpiRow2').innerHTML =
+    kpiCard('VTR', pct(ov.vtr), 'Views / Impr', 'soft', CAVEAT_VTR) +
+    kpiCard('Clicks', num(ov.clicks), null, '') +
+    kpiCard('CTR', pct(ov.ctr), 'Clicks / Impr', '') +
+    kpiCard('CPM', inr2(ov.cpm), 'per 1,000 impr', 'rev') +
+    kpiCard('CPV', inr2(ov.cpv), 'per view', 'rev');
+}
+
+const TREND_METRICS = [
+  {k:'spend', label:'Spend',       fmt:cr,   calc:b=>b.spend},
+  {k:'impressions', label:'Impressions', fmt:cmpct, calc:b=>b.impressions},
+  {k:'views', label:'Views',       fmt:cmpct, calc:b=>b.views}
+];
+let trendMetric='spend';
+const trendOff = {};
+
+function renderTrend(){
+  const pt = platformTotals();
+  document.getElementById('trendPills').innerHTML = TREND_METRICS.map(m =>
+    '<button class="mpill'+(m.k===trendMetric?' active':'')+'" onclick="setTrendMetric(\''+m.k+'\')">'+m.label+'</button>').join('');
+  document.getElementById('trendToggles').innerHTML = pt.active.map(p =>
+    '<button class="ctog'+(trendOff[p.key]?'':' on')+'" onclick="toggleTrend(\''+p.key+'\')">'+
+    '<span class="pdot" style="background:'+p.color+';margin:0;"></span>'+p.label+'</button>').join('');
+  drawTrend(pt);
+}
+function setTrendMetric(k){ trendMetric=k; renderTrend(); }
+function toggleTrend(k){ trendOff[k]=!trendOff[k]; renderTrend(); }
+
+function drawTrend(pt){
+  destroyChart('trend');
+  const m = TREND_METRICS.find(x=>x.k===trendMetric);
+  document.getElementById('trendTitle').textContent = 'Daily '+m.label;
+
+  const rows = allRows().filter(r=>r.date);
+  const dates = Array.from(new Set(rows.map(r=>r.date))).sort();
+  if(!dates.length) return;
+
+  const series = pt.active.filter(p=>!trendOff[p.key]).map(p => {
+    const byDate = {};
+    dates.forEach(d => { byDate[d]=bucket(); });
+    rows.filter(r=>r.platform===p.key).forEach(r => { if(byDate[r.date]) addTo(byDate[r.date], r); });
+    return { label:p.label, borderColor:p.color, backgroundColor:p.color,
+      data: dates.map(d => m.calc(byDate[d])),
+      borderWidth:2, pointRadius:0, pointHoverRadius:4, tension:.3, spanGaps:true };
+  });
+
+  CHARTS.trend = new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{ labels: dates.map(d => new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})), datasets:series },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label: c => c.dataset.label+': '+m.fmt(c.parsed.y) } } },
+      scales:{ x:{ grid:{display:false}, ticks:{font:{size:9}, color:'#9aa0b0', maxRotation:0, autoSkipPadding:14} },
+               y:{ grid:{color:'#f2f2f6'}, ticks:{font:{size:9}, color:'#9aa0b0',
+                   callback: v => (trendMetric==='vtr'||trendMetric==='ctr') ? (v*100).toFixed(1)+'%' : cmpct(v) } } },
+      interaction:{mode:'index', intersect:false} }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER — section 2: by platform
+   ═══════════════════════════════════════════════════════════ */
+const METRIC_COLS = [
+  {h:'Spend',       f:b=>cr(b.spend),        raw:b=>b.spend},
+  {h:'Impressions', f:b=>num(b.impressions), raw:b=>b.impressions},
+  {h:'Reach',       f:b=>b.reachKnown?num(b.reach):'—', raw:b=>b.reachKnown?b.reach:null},
+  {h:'Freq.',       f:b=>b.freq==null?'—':num(b.freq,2), raw:b=>b.freq},
+  // A publisher that reports no views has no view count — that is a dash, not a zero.
+  {h:'Views',       f:b=>(b.vidImpr||0)===0 ? '—' : num(b.views), raw:b=>(b.vidImpr||0)===0?null:b.views},
+  {h:'VTR',         f:b=>pct(b.vtr),         raw:b=>b.vtr},
+  {h:'Clicks',      f:b=>num(b.clicks),      raw:b=>b.clicks},
+  {h:'CTR',         f:b=>pct(b.ctr),         raw:b=>b.ctr},
+  {h:'CPM',         f:b=>inr2(b.cpm),        raw:b=>b.cpm},
+  {h:'CPV',         f:b=>inr2(b.cpv),        raw:b=>b.cpv}
+];
+
+function metricTable(elId, firstHdr, rows, opts){
+  opts = opts||{};
+  // opts.omit lets a table drop columns it genuinely cannot fill. A column of
+  // dashes reads as a bug; a missing column reads as a decision.
+  const cols = opts.omit ? METRIC_COLS.filter(c => opts.omit.indexOf(c.h)<0) : METRIC_COLS;
+  let h = '<thead><tr><th>'+esc(firstHdr)+'</th>'+
+    (opts.extraHdr||'') + cols.map(c=>'<th>'+c.h+'</th>').join('')+'</tr></thead><tbody>';
+  rows.forEach(r => {
+    h += '<tr'+(r.isTotal?' class="tot"':'')+'><td>'+r.name+'</td>'+
+      (r.extra||'') + cols.map(c=>'<td class="num0">'+c.f(r.b)+'</td>').join('')+'</tr>';
+  });
+  document.getElementById(elId).innerHTML = h+'</tbody>';
+}
+
+function renderPlatformSection(pt, ov){
+  const rows = pt.active.map(p => ({
+    name:'<span class="pdot" style="background:'+p.color+'"></span>'+p.label,
+    b: pt.byPlat[p.key]
+  }));
+  rows.push({name:'Total', b:ov, isTotal:true});
+  metricTable('platTbl','Platform',rows);
+
+  // Spend share donut
+  destroyChart('platSpend');
+  CHARTS.platSpend = new Chart(document.getElementById('platSpendChart'), {
+    type:'doughnut',
+    data:{ labels:pt.active.map(p=>p.label),
+      datasets:[{ data:pt.active.map(p=>pt.byPlat[p.key].spend),
+        backgroundColor:pt.active.map(p=>p.color), borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+      plugins:{ legend:{position:'right', labels:{font:{size:10}, boxWidth:10, padding:9}},
+        tooltip:{ callbacks:{ label: c => {
+          const tot = c.dataset.data.reduce((a,b)=>a+b,0);
+          return c.label+': '+cr(c.parsed)+'  ('+(tot?(c.parsed/tot*100).toFixed(1):'0')+'%)'; } } } } }
+  });
+
+  // Impressions vs views
+  destroyChart('platImp');
+  CHARTS.platImp = new Chart(document.getElementById('platImpChart'), {
+    type:'bar',
+    data:{ labels:pt.active.map(p=>p.label),
+      datasets:[
+        {label:'Impressions', data:pt.active.map(p=>pt.byPlat[p.key].impressions), backgroundColor:'#c8d3ea', borderRadius:3},
+        {label:'Views',       data:pt.active.map(p=>pt.byPlat[p.key].views),       backgroundColor:'#CC0000', borderRadius:3}
+      ] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{ callbacks:{ label: c => c.dataset.label+': '+num(c.parsed.y) } } },
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:10}}},
+               y:{grid:{color:'#f2f2f6'}, ticks:{font:{size:9}, callback:v=>cmpct(v)}} } }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER — section 3: by market
+   ═══════════════════════════════════════════════════════════ */
+function marketBuckets(){
+  const rows = allRows();
+  const mkts = marketOrder(Array.from(new Set(rows.map(r => r.market).filter(Boolean))));
+  const B = {}; mkts.forEach(m => { B[m]=bucket(); });
+  rows.forEach(r => { if(B[r.market]) addTo(B[r.market], r); });
+
+  // Reach by market: DV360 from its line-item reach call, Meta and LinkedIn from
+  // their no-date campaign calls. Only add where the platform actually reported it.
+  const addReach = (m,v) => { if(!B[m]) return; if(!B[m].reachKnown){ B[m].reach=0; B[m].reachKnown=true; } B[m].reach+=v; };
+  /* No DV360 contribution: its reach is now campaign-level, and the one branding
+     campaign spans both P0 and P1, so it cannot be attributed to a market. The Reach
+     and Frequency columns are dropped from the market table rather than shown as a
+     Meta-plus-LinkedIn figure masquerading as a total. */
+  S.mt.camp.forEach(r => { if(r.reachRaw>0) addReach(r.market, r.reachRaw); });
+  S.li.camp.forEach(r => { if(r.reachRaw>0) addReach(r.market, r.reachRaw); });
+  // Publishers contribute no reach at all, so nothing to add here.
+
+  return {mkts, B};
+}
+
+function renderMarketSection(pt){
+  const {mkts,B} = marketBuckets();
+  const der = {}; mkts.forEach(m => { der[m]=derive(B[m]); });
+
+  const tot = bucket(); let rs=0, ra=false;
+  mkts.forEach(m => { addTo(tot,B[m]); if(B[m].reachKnown){ rs+=B[m].reach; ra=true; } });
+  if(ra){ tot.reach=rs; tot.reachKnown=true; }
+
+  const rows = mkts.map(m => ({ name: mkChip(m), b: der[m] }));
+  rows.push({name:'Total', b:derive(tot), isTotal:true});
+  metricTable('mktTbl','Market',rows,{omit:['Reach','Freq.']});
+
+  // Market x Platform matrix
+  const cross = {};
+  allRows().forEach(r => {
+    const k = r.market+'||'+r.platform;
+    if(!cross[k]) cross[k]=bucket();
+    addTo(cross[k], r);
+  });
+  const xr = [];
+  mkts.forEach(m => {
+    pt.active.forEach(p => {
+      const b = cross[m+'||'+p.key];
+      if(!b || (!b.impressions && !b.spend)) return;
+      xr.push({ name: mkChip(m)+' <span class="pdot" style="background:'+p.color+'"></span>'+p.label,
+        b: derive(b) });
+    });
+  });
+  // Reach is not available at market x platform grain without a call per cell,
+  // so those columns are dropped rather than shown as dashes.
+  metricTable('mktPlatTbl','Market × Platform',xr,{omit:['Reach','Freq.']});
+
+  // Charts
+  destroyChart('mktSpend');
+  CHARTS.mktSpend = new Chart(document.getElementById('mktSpendChart'), {
+    type:'doughnut',
+    data:{ labels:mkts, datasets:[{ data:mkts.map(m=>B[m].spend),
+      backgroundColor:mkts.map(m=>MARKET_COLOR[m]||'#9aa0b0'), borderWidth:2, borderColor:'#fff' }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+      plugins:{ legend:{position:'right', labels:{font:{size:10}, boxWidth:10, padding:9}},
+        tooltip:{ callbacks:{ label:c => {
+          const t=c.dataset.data.reduce((a,b)=>a+b,0);
+          return c.label+': '+cr(c.parsed)+'  ('+(t?(c.parsed/t*100).toFixed(1):'0')+'%)'; } } } } }
+  });
+
+  destroyChart('mktPlat');
+  CHARTS.mktPlat = new Chart(document.getElementById('mktPlatChart'), {
+    type:'bar',
+    data:{ labels:mkts, datasets: pt.active.map(p => ({
+      label:p.label, backgroundColor:p.color, borderRadius:3,
+      data: mkts.map(m => { const b=cross[m+'||'+p.key]; return b?b.spend:0; }) })) },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{ callbacks:{ label:c => c.dataset.label+': '+cr(c.parsed.y) } } },
+      scales:{ x:{stacked:true, grid:{display:false}, ticks:{font:{size:10}}},
+               y:{stacked:true, grid:{color:'#f2f2f6'}, ticks:{font:{size:9}, callback:v=>cmpct(v)}} } }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════════════════ */
+function switchTab(name, btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.tbbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function subTab(group, pane, btn){
+  const wrap = btn.parentElement;
+  wrap.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  wrap.parentElement.querySelectorAll('.spane').forEach(p=>p.classList.remove('active'));
+  document.getElementById(group+'-'+pane).classList.add('active');
+}
+
+function pkpiHtml(b, extra){
+  const cells = [
+    ['Spend', cr(b.spend)], ['Impressions', cmpct(b.impressions)],
+    ['Reach', b.reachKnown?cmpct(b.reach):'—'], ['Frequency', b.freq==null?'—':num(b.freq,2)],
+    ['Views', (b.vidImpr||0)===0 ? '—' : cmpct(b.views)], ['VTR', pct(b.vtr)], ['Clicks', num(b.clicks)],
+    ['CTR', pct(b.ctr)], ['CPM', inr2(b.cpm)], ['CPV', inr2(b.cpv)]
+  ].concat(extra||[]);
+  return cells.map(c=>'<div><div class="kl">'+esc(c[0])+'</div><div class="kv">'+c[1]+'</div></div>').join('');
+}
+
+/* Group rows by a key into derived buckets */
+function groupBy(rows, keyFn){
+  const M = new Map();
+  rows.forEach(r => {
+    const k = keyFn(r);
+    if(!M.has(k)) M.set(k, {key:k, market:r.market, b:bucket(), rows:[]});
+    const g = M.get(k);
+    addTo(g.b, r); g.rows.push(r);
+    if(g.market!==r.market) g.market='Mixed';
+  });
+  return Array.from(M.values()).sort((a,b)=>b.b.spend-a.b.spend);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DV360 TAB
+   ═══════════════════════════════════════════════════════════ */
+function renderDv360(){
+  const pt = platformTotals();
+  const b = pt.byPlat.dv360 || derive(bucket());
+  document.getElementById('dvKpi').innerHTML = pkpiHtml(b,
+    [['Complete Views', cmpct(b.complete)], ['Completion %', pct(b.compRate)]]);
+
+  /* Line item — no Reach or Frequency. Reach is de-duplicated by DV360 at campaign
+     level now, so there is no line-item figure to show and inventing one by splitting
+     the campaign total would be a guess. */
+  const lis = groupBy(S.dv.day, r=>r.item);
+  metricTable('dvLiTbl','Line Item',
+    lis.map(g => ({ name:esc(g.key),
+      extra:'<td>'+mkChip(g.market)+'</td><td class="num0">'+(g.b.views===g.b.complete && g.rows.every(r=>r.trueview===0) ? 'Complete' : 'TrueView')+'</td>',
+      b:derive(g.b) }))
+      .concat([{name:'Total', extra:'<td></td><td></td>', b:b, isTotal:true}]),
+    {extraHdr:'<th>Market</th><th>View basis</th>', omit:['Reach','Freq.']});
+
+  /* YouTube assets — restricted to the branding campaign. DV360 will not return the
+     ad-name dimension alongside campaign or spend, so the campaign filter is applied
+     to the ad name itself and this view carries impressions and views only. */
+  const yt = S.dv.yt
+    .map(r => ({ name:r.trueview_ad||'', group:r.trueview_ad_group||'',
+                 impressions:N(r.impressions), views:N(r.trueview_views) }))
+    .filter(r => CONFIG.BRANDING_MATCH.test(r.name) || CONFIG.BRANDING_MATCH.test(r.group))
+    .sort((a,b)=>b.impressions-a.impressions);
+  const dropped = S.dv.yt.length - yt.length;
+
+  const missingArt = yt.filter(r => !assetImage(r.name)).length;
+  document.getElementById('dvYtNote').innerHTML =
+    '<div class="notice n-flat" style="margin:0 14px 4px;">Filtered to the branding campaign'+
+    (dropped>0 ? ' — '+dropped+' ad row'+(dropped>1?'s':'')+' from other campaigns excluded' : '')+
+    '. DV360 will not return YouTube ad names alongside spend or line item, so this view carries '+
+    'impressions and TrueView views only; spend sits on the Line Item view.'+
+    (missingArt ? ' <b>'+missingArt+' of '+yt.length+' assets have no artwork yet</b> — Windsor exposes no '+
+      'thumbnail or video ID for DV360, so paste a YouTube video ID or image URL per film into '+
+      '<code>CONFIG.ASSET_IMAGES</code> in this file and the stills appear here.' : '')+
+    '</div>';
+
+  document.getElementById('dvYtAssets').innerHTML = yt.map(r => {
+    const short = shortName(r.name), img = assetImage(r.name);
+    return '<div class="acard">'+
+      (img ? '<img class="athumb" src="'+esc(img)+'" alt="" onerror="assetImgFail(this)">'
+           : '<div class="aph">'+esc(filmOf(r.name)||'no artwork')+'</div>')+
+      '<div class="aname">'+esc(short)+'</div><div class="arows">'+
+      '<div class="arow"><span>Line item</span><b style="font-weight:600;font-size:9.5px;">'+esc(shortName(r.group)||'—')+'</b></div>'+
+      '<div class="arow"><span>Impressions</span><b>'+num(r.impressions)+'</b></div>'+
+      '<div class="arow"><span>TrueView views</span><b>'+num(r.views)+'</b></div>'+
+      '<div class="arow"><span>VTR</span><b>'+pct(div(r.views,r.impressions))+'</b></div>'+
+      '</div></div>';
+  }).join('') || '<div style="padding:20px;color:#bbb;font-style:italic;">No YouTube asset rows for this campaign in the selected range</div>';
+
+  let yh = '<thead><tr><th>YouTube Ad</th><th>Ad Group</th><th>Impressions</th><th>TrueView Views</th><th>VTR</th></tr></thead><tbody>';
+  yt.forEach(r => { yh += '<tr><td>'+esc(r.name)+'</td><td>'+esc(r.group||'—')+'</td>'+
+    '<td class="num0">'+num(r.impressions)+'</td>'+
+    '<td class="num0">'+num(r.views)+'</td><td class="num0">'+pct(div(r.views,r.impressions))+'</td></tr>'; });
+  if(!yt.length) yh += '<tr><td colspan="5" style="text-align:center;color:#bbb;font-style:italic;padding:22px;">No rows</td></tr>';
+  document.getElementById('dvYtTbl').innerHTML = yh+'</tbody>';
+
+  // Quartile drop-off
+  destroyChart('dvQuart');
+  const vidLis = lis.filter(g=>g.b.starts>0);
+  CHARTS.dvQuart = new Chart(document.getElementById('dvQuartChart'), {
+    type:'bar',
+    data:{ labels:vidLis.map(g=>shortName(g.key)),
+      datasets:[
+        {label:'25%',  data:vidLis.map(g=>div(g.b.q1,g.b.starts)), backgroundColor:'#f5b8b8', borderRadius:3},
+        {label:'50%',  data:vidLis.map(g=>div(g.b.q2,g.b.starts)), backgroundColor:'#e07272', borderRadius:3},
+        {label:'75%',  data:vidLis.map(g=>div(g.b.q3,g.b.starts)), backgroundColor:'#d13c3c', borderRadius:3},
+        {label:'100%', data:vidLis.map(g=>div(g.b.complete,g.b.starts)), backgroundColor:'#CC0000', borderRadius:3}
+      ] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{ callbacks:{ label:c => c.dataset.label+': '+pct(c.parsed.y,1) } } },
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:9}, maxRotation:30, minRotation:0, autoSkip:false}},
+               y:{grid:{color:'#f2f2f6'}, max:1, ticks:{font:{size:9}, callback:v=>(v*100).toFixed(0)+'%'}} } }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   META TAB
+   ═══════════════════════════════════════════════════════════ */
+function renderMeta(){
+  const pt = platformTotals();
+  const b = pt.byPlat.meta || derive(bucket());
+  document.getElementById('mtKpi').innerHTML = pkpiHtml(b,
+    [['100% Views', cmpct(b.complete)], ['100% Rate', pct(b.compRate)]]);
+
+  // Campaign — reach comes from the no-date call so it is de-duplicated per campaign
+  const camps = groupBy(S.mt.camp, r=>r.campaign);
+  metricTable('mtCpTbl','Campaign',
+    camps.map(g => {
+      const der = derive(g.b);
+      const rr = g.rows.reduce((a,r)=>a+(r.reachRaw||0),0);
+      if(rr>0){ der.reach=rr; der.reachKnown=true; der.freq=div(der.impressions, rr); }
+      return { name:esc(g.key), extra:'<td>'+mkChip(g.market)+'</td>', b:der };
+    }).concat([{name:'Total', extra:'<td></td>', b:b, isTotal:true}]),
+    {extraHdr:'<th>Market</th>'});
+
+  /* Ad-set rows are rolled up from the ad rows. Metrics add cleanly; reach does not —
+     summing per-ad reach would count anyone who saw two ads in the set twice — so the
+     Reach and Frequency columns are dropped here rather than shown wrong. */
+  const sets = groupBy(S.mt.adset, r=>r.group);
+  metricTable('mtAsTbl','Ad Set',
+    sets.map(g => ({ name:esc(g.key), extra:'<td>'+mkChip(g.market)+'</td>', b:derive(g.b) }))
+      .concat([{name:'Total', extra:'<td></td>', b:b, isTotal:true}]),
+    {extraHdr:'<th>Market</th>', omit:['Reach','Freq.']});
+
+  // Ads / assets
+  const ads = groupBy(S.mt.ad, r=>r.item);
+  document.getElementById('mtAdAssets').innerHTML = ads.slice(0,8).map(g => {
+    const d = derive(g.b);
+    const short = shortName(g.key);
+    return '<div class="acard"><div class="aph">'+esc(short)+'</div>'+
+      '<div class="aname">'+esc(short)+'</div><div class="arows">'+
+      '<div class="arow"><span>Spend</span><b>'+cr(d.spend)+'</b></div>'+
+      '<div class="arow"><span>Impressions</span><b>'+num(d.impressions)+'</b></div>'+
+      '<div class="arow"><span>ThruPlays</span><b>'+num(d.views)+'</b></div>'+
+      '<div class="arow"><span>VTR</span><b>'+pct(d.vtr)+'</b></div>'+
+      '<div class="arow"><span>CPV</span><b>'+inr2(d.cpv)+'</b></div>'+
+      '<div class="arow"><span>CTR</span><b>'+pct(d.ctr)+'</b></div>'+
+      '</div></div>';
+  }).join('') || '<div style="padding:20px;color:#bbb;font-style:italic;">No ad rows returned</div>';
+
+  metricTable('mtAdTbl','Ad',
+    ads.map(g => {
+      const der = derive(g.b);
+      const rr = g.rows.reduce((a,r)=>a+(r.reachRaw||0),0);
+      if(rr>0){ der.reach=rr; der.reachKnown=true; der.freq=div(der.impressions, rr); }
+      return { name:esc(g.key), extra:'<td>'+mkChip(g.market)+'</td>', b:der };
+    }), {extraHdr:'<th>Market</th>'});
+
+  // ThruPlay rate by ad
+  destroyChart('mtAd');
+  const top = ads.slice(0,10);
+  CHARTS.mtAd = new Chart(document.getElementById('mtAdChart'), {
+    type:'bar',
+    data:{ labels: top.map(g=>shortName(g.key)),
+      datasets:[
+        {label:'ThruPlay rate', data:top.map(g=>div(g.b.views,g.b.impressions)), backgroundColor:'#1877F2', borderRadius:3},
+        {label:'100% rate',     data:top.map(g=>div(g.b.complete,g.b.impressions)), backgroundColor:'#CC0000', borderRadius:3}
+      ] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{ callbacks:{ label:c => c.dataset.label+': '+pct(c.parsed.y,2) } } },
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:9}, maxRotation:30, minRotation:0, autoSkip:false}},
+               y:{grid:{color:'#f2f2f6'}, ticks:{font:{size:9}, callback:v=>(v*100).toFixed(1)+'%'}} } }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LINKEDIN TAB
+   ═══════════════════════════════════════════════════════════ */
+function renderLinkedIn(){
+  const pt = platformTotals();
+  const b = pt.byPlat.linkedin || derive(bucket());
+  document.getElementById('liKpi').innerHTML = pkpiHtml(b,
+    [['Completions', cmpct(b.complete)], ['Completion %', pct(b.compRate)]]);
+
+  const camps = groupBy(S.li.camp, r=>r.campaign);
+  metricTable('liCpTbl','Campaign',
+    camps.map(g => {
+      const der = derive(g.b);
+      const rr = g.rows.reduce((a,r)=>a+(r.reachRaw||0),0);
+      if(rr>0){ der.reach=rr; der.reachKnown=true; der.freq=div(der.impressions, rr); }
+      return { name:esc(g.key), extra:'<td>'+mkChip(g.market)+'</td>', b:der };
+    }).concat([{name:'Total', extra:'<td></td>', b:b, isTotal:true}]),
+    {extraHdr:'<th>Market</th>'});
+
+  // Creatives with thumbnails
+  const crs = groupBy(S.li.cr, r=>r.item);
+  const thumbOf = k => { const g=crs.find(x=>x.key===k); return g && g.rows[0] ? g.rows[0].thumb : ''; };
+  document.getElementById('liCrAssets').innerHTML = crs.map(g => {
+    const d = derive(g.b), t = thumbOf(g.key);
+    return '<div class="acard">'+
+      (t ? '<img class="athumb" src="'+esc(t)+'" alt="" onerror="this.outerHTML=\'<div class=\\\'aph\\\'>thumbnail expired</div>\'">'
+         : '<div class="aph">no thumbnail</div>')+
+      '<div class="aname">'+esc(g.key)+'</div><div class="arows">'+
+      '<div class="arow"><span>Spend</span><b>'+cr(d.spend)+'</b></div>'+
+      '<div class="arow"><span>Impressions</span><b>'+num(d.impressions)+'</b></div>'+
+      '<div class="arow"><span>Views</span><b>'+num(d.views)+'</b></div>'+
+      '<div class="arow"><span>VTR</span><b>'+pct(d.vtr)+'</b></div>'+
+      '<div class="arow"><span>CPV</span><b>'+inr2(d.cpv)+'</b></div>'+
+      '<div class="arow"><span>Completion %</span><b>'+pct(d.compRate)+'</b></div>'+
+      '</div></div>';
+  }).join('') || '<div style="padding:20px;color:#bbb;font-style:italic;">No creative rows returned</div>';
+
+  metricTable('liCrTbl','Creative',
+    crs.map(g => ({ name:esc(g.key), extra:'<td>'+mkChip(g.market)+'</td>', b:derive(g.b) })),
+    {extraHdr:'<th>Market</th>'});
+
+  destroyChart('liQuart');
+  CHARTS.liQuart = new Chart(document.getElementById('liQuartChart'), {
+    type:'bar',
+    data:{ labels:crs.map(g=>g.key),
+      datasets:[
+        {label:'25%',  data:crs.map(g=>div(g.b.q1,g.b.impressions)), backgroundColor:'#9dc0e8', borderRadius:3},
+        {label:'50%',  data:crs.map(g=>div(g.b.q2,g.b.impressions)), backgroundColor:'#5a95d6', borderRadius:3},
+        {label:'75%',  data:crs.map(g=>div(g.b.q3,g.b.impressions)), backgroundColor:'#2b6cb0', borderRadius:3},
+        {label:'100%', data:crs.map(g=>div(g.b.complete,g.b.impressions)), backgroundColor:'#0A66C2', borderRadius:3}
+      ] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{position:'bottom', labels:{font:{size:10}, boxWidth:10}},
+        tooltip:{ callbacks:{ label:c => c.dataset.label+': '+pct(c.parsed.y,1) } } },
+      scales:{ x:{grid:{display:false}, ticks:{font:{size:9}}},
+               y:{grid:{color:'#f2f2f6'}, ticks:{font:{size:9}, callback:v=>(v*100).toFixed(0)+'%'}} } }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PUBLISHER TABS — Summary, Day on Day, Plan vs Achieved
+   ═══════════════════════════════════════════════════════════ */
+function pubBand(pub){
+  return '<div class="pband" style="background:'+pub.color+'">'+
+    '<span>'+esc(pub.label)+'</span>'+
+    '<span style="margin-left:auto;font-weight:600;font-size:10px;opacity:.85;">'+
+    (pub.plan ? esc(pub.plan.buyType)+' buy &nbsp;·&nbsp; no view or reach data reported' :
+                'awaiting data') + '</span></div>';
+}
+
+/* Plan vs Achieved. Plan comes from CONFIG (the sheet's Plan block is out of Windsor's
+   reach); achieved is summed from the same live rows that feed Day on Day, so the two
+   views can never disagree. Metrics the publisher does not report stay blank rather
+   than being shown as zero — a nil VTR is not a VTR of 0%. */
+function planTable(pub, b, days, flightRows){
+  const pl = pub.plan;
+  const span = flightRows && flightRows.length
+    ? (flightRows.map(r=>r.date).sort()[0] + ' to ' + flightRows.map(r=>r.date).sort().slice(-1)[0])
+    : '';
+  const rows = [
+    ['Unit cost',   pl.unitCost==null?null:pl.unitCost, div(b.spend,b.impressions)==null?null:b.spend/b.impressions*1000, 'money', true],
+    ['Budget',      pl.budget,      b.spend,       'money'],
+    ['Impressions', pl.impressions, b.impressions, 'num'],
+    ['Clicks',      pl.clicks,      b.clicks,      'num'],
+    ['CTR',         pl.ctr,         b.ctr,         'pct'],
+    ['Reach',       pl.reach,       null,          'num'],
+    ['Frequency',   pl.frequency,   null,          'raw'],
+    ['Views',       pl.views,       null,          'num'],
+    ['VTR',         pl.vtr,         null,          'pct']
+  ];
+  const fmt = (v,kind) => v==null ? '—'
+    : kind==='money' ? inr(v) : kind==='pct' ? pct(v) : kind==='num' ? num(v) : esc(String(v));
+
+  let t = '<thead><tr><th>Metric</th><th>Plan (full flight)</th><th>Achieved to date</th>'+
+          '<th>Delivered</th><th>vs pace</th></tr></thead><tbody>';
+  rows.forEach(r => {
+    const [label, plan, ach, kind, lowerIsBetter] = r;
+    const planNum = typeof plan === 'number' ? plan : null;
+    let share = '—', varn = '—', cls = '';
+    if(planNum != null && ach != null && planNum !== 0){
+      const ratio = ach / planNum;
+      share = (ratio*100).toFixed(1)+'%';
+      /* Rate metrics (CTR, unit cost) are not cumulative, so they compare straight to
+         plan. Volume metrics compare to the pro-rata share of the flight elapsed —
+         judging a part-delivered buy against its full-flight budget would flag every
+         mid-flight campaign as catastrophically behind. */
+      const cumulative = kind !== 'pct' && !lowerIsBetter;
+      const elapsed = (cumulative && pl.durationDays && days > 0)
+        ? Math.min(1, days / pl.durationDays) : 1;
+      const target = planNum * elapsed;
+      const delta = target > 0 ? (ach / target) - 1 : null;
+      if(delta != null){
+        const good = lowerIsBetter ? delta <= 0.0001 : delta >= -0.02;
+        cls = ' style="color:'+(good ? '#1a9e5c' : '#CC0000')+';font-weight:700;"';
+        varn = (delta>=0?'+':'') + (delta*100).toFixed(1)+'%';
+      }
+    }
+    t += '<tr><td>'+esc(label)+'</td>'+
+         '<td class="num0">'+fmt(plan,kind)+'</td>'+
+         '<td class="num0">'+fmt(ach,kind)+'</td>'+
+         '<td class="num0">'+share+'</td>'+
+         '<td class="num0"'+cls+'>'+varn+'</td></tr>';
+  });
+  t += '</tbody>';
+
+  let pacing = '<div class="notice n-flat" style="margin:10px 14px 0;">'+
+    '<b>This table ignores the date range at the top of the page.</b> A plan covers a whole '+
+    'flight, so achieved is measured flight-to-date'+(span ? ' ('+esc(span)+')' : '')+'. '+
+    'Day on Day is the view that follows the date picker.';
+  if(pl.durationDays && days > 0){
+    const expected = Math.min(1, days / pl.durationDays);
+    pacing += ' <b>'+days+' of '+pl.durationDays+' days have data — '+(expected*100).toFixed(0)+
+      '% of the flight</b>, so <i>Delivered</i> should be read against that share, not against 100%. '+
+      'The <i>vs pace</i> column already does exactly that: it compares delivery to '+
+      inr(Math.round(pl.budget*expected))+' of budget and '+
+      num(Math.round(pl.impressions*expected))+' impressions, being the pro-rata expectation today.';
+  }
+  pacing += '</div>';
+  return {table:t, pacing:pacing};
+}
+
+function pubMeta(pub){
+  const pl = pub.plan;
+  const items = [['Line item',pl.line],['Audience',pl.audience],['Placement',pl.placement],
+                 ['Ad format',pl.format],['Creative',pl.creative],['Duration',pl.duration],
+                 ['Buy type',pl.buyType],
+                 ['Audience size', pl.audienceSize==null?'—':num(pl.audienceSize)],
+                 ['Planned reach %', pl.reachPct==null?'—':pct(pl.reachPct,0)]];
+  return '<div class="tblwrap" style="margin:0 14px 14px;"><div class="tblscroll"><table class="dt">'+
+    '<tbody>'+items.map(i =>
+      '<tr><td style="max-width:210px;">'+esc(i[0])+'</td>'+
+      '<td style="text-align:left;white-space:normal;color:#3a3f52;">'+esc(String(i[1]==null?'—':i[1]))+'</td></tr>'
+    ).join('')+'</tbody></table></div></div>';
+}
+
+function renderPublishers(){
+  CONFIG.PUBLISHERS.forEach(pub => {
+    const host = document.getElementById('pub-'+pub.key);
+    if(!host) return;
+    const rows = S.pub[pub.key] || [];
+    const configured = !!(pub.account && pub.cols && pub.cols.date);
+
+    // ── not wired yet: show the shape the data needs, not a bare apology ──
+    if(!configured){
+      host.innerHTML = '<div class="pcard">'+pubBand(pub)+
+        '<div style="padding:20px 22px;">'+
+        '<div class="notice n-info" style="margin-bottom:16px;"><b>No sheet connected for '+esc(pub.label)+' yet.</b> '+
+        'Nothing here is estimated or placeholder — the slot is empty, and every total elsewhere in this '+
+        'dashboard excludes '+esc(pub.label)+'.</div>'+
+        '<div class="meth" style="box-shadow:none;padding:0;max-width:none;">'+
+        '<h3>Summary</h3><p>Spend, Impressions, Clicks, CTR and CPM, once data is connected.</p>'+
+        '<h3>Day on Day</h3><p>One row per date, same columns as the Summary.</p>'+
+        '<h3>Plan vs Achieved</h3><p>Plan targets against live delivery, with a Delivered share and a '+
+        'variance column, plus flight pacing so a part-delivered buy is not misread as underdelivery.</p>'+
+        '<h3>To switch it on</h3><p>Add the day-wise tab to the Cheil planning sheet with a date column '+
+        'plus impressions, clicks and spend, connect that tab in Windsor, then put its gid and the four '+
+        'column names into the <code>'+esc(pub.key)+'</code> entry of <code>CONFIG.PUBLISHERS</code>. '+
+        'The plan targets go in the same entry. No rebuild needed.</p>'+
+        '</div></div></div>';
+      return;
+    }
+
+    const b = derive(rows.reduce((acc,r) => addTo(acc,r), bucket()));
+    const days = new Set(rows.map(r=>r.date)).size;
+
+    // ── Summary strip ──
+    const kpis = [['Spend', cr(b.spend)], ['Impressions', cmpct(b.impressions)],
+                  ['Clicks', num(b.clicks)], ['CTR', pct(b.ctr)],
+                  ['CPM', inr2(b.cpm)], ['Days with data', num(days)]];
+    let html = '<div class="pcard">'+pubBand(pub)+
+      '<div class="pkpi">'+kpis.map(c =>
+        '<div><div class="kl">'+esc(c[0])+'</div><div class="kv">'+c[1]+'</div></div>').join('')+'</div>';
+
+    if(!rows.length){
+      html += '<div class="notice n-warn" style="margin:12px 14px;">No '+esc(pub.label)+
+        ' rows fall inside the selected date range. The sheet may only cover part of it.</div>';
+    }
+
+    html += '<div class="stabs">'+
+      '<button class="stab active" onclick="subTab(\'' + pub.key + '\',\'dod\',this)">Day on Day</button>'+
+      '<button class="stab" onclick="subTab(\'' + pub.key + '\',\'pva\',this)">Plan vs Achieved</button>'+
+      '</div>';
+
+    // ── Day on Day ──
+    let dh = '<thead><tr><th>Date</th><th>Spend</th><th>Impressions</th><th>Clicks</th><th>CTR</th><th>CPM</th></tr></thead><tbody>';
+    rows.slice().sort((x,y)=> x.date<y.date?-1:1).forEach(r => {
+      const d = derive(addTo(bucket(), r));
+      dh += '<tr><td>'+new Date(r.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+'</td>'+
+        '<td class="num0">'+inr(d.spend)+'</td><td class="num0">'+num(d.impressions)+'</td>'+
+        '<td class="num0">'+num(d.clicks)+'</td><td class="num0">'+pct(d.ctr)+'</td>'+
+        '<td class="num0">'+inr2(d.cpm)+'</td></tr>';
+    });
+    dh += '<tr class="tot"><td>Total</td><td class="num0">'+cr(b.spend)+'</td>'+
+      '<td class="num0">'+num(b.impressions)+'</td><td class="num0">'+num(b.clicks)+'</td>'+
+      '<td class="num0">'+pct(b.ctr)+'</td><td class="num0">'+inr2(b.cpm)+'</td></tr>';
+    if(!rows.length) dh += '<tr><td colspan="6" style="text-align:center;color:#bbb;font-style:italic;padding:22px;">No rows in this range</td></tr>';
+    dh += '</tbody>';
+
+    html += '<div class="spane active" id="'+pub.key+'-dod"><div class="tblscroll">'+
+      '<table class="dt">'+dh+'</table></div></div>';
+
+    // ── Plan vs Achieved ──
+    const allRowsPub = S.pubAll[pub.key] || [];
+    const bAll = derive(allRowsPub.reduce((acc,r) => addTo(acc,r), bucket()));
+    const daysAll = new Set(allRowsPub.map(r=>r.date)).size;
+    const pv = pub.plan ? planTable(pub, bAll, daysAll, allRowsPub) : null;
+    html += '<div class="spane" id="'+pub.key+'-pva">'+
+      (pv ? pubMeta(pub) + '<div class="tblscroll"><table class="dt">'+pv.table+'</table></div>' + pv.pacing
+          : '<div class="notice n-flat" style="margin:0 14px;">No plan recorded for this publisher.</div>')+
+      '</div></div>';
+
+    host.innerHTML = html;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXPORT
+   ═══════════════════════════════════════════════════════════ */
+function sheetFrom(rows, hdr){ return XLSX.utils.aoa_to_sheet([hdr].concat(rows)); }
+function bRow(name, b){ return [name, b.spend, b.impressions, b.reachKnown?b.reach:'', b.freq, b.views,
+  b.vtr, b.clicks, b.ctr, b.cpm, b.cpv]; }
+const B_HDR = ['Name','Spend','Impressions','Reach','Frequency','Views','VTR','Clicks','CTR','CPM','CPV'];
+
+function exportXlsx(){
+  const pt = platformTotals(), ov = overallTotals(pt);
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, sheetFrom([
+    ['Kohler Branding Tracker'], ['Range', S.range.from+' to '+S.range.to],
+    ['Pulled', new Date().toISOString()], [],
+    ['NOTE','Reach above campaign level is a SUM, not a de-duplicated audience. Not de-duplicated across platforms, and DV360 does not de-duplicate across its line items either. Treat platform, market and Overall reach as ceilings; Frequency derived from them reads low.'],
+    ['NOTE','Views are TrueView (DV360), ThruPlays (Meta) and video views (LinkedIn) — different thresholds, not comparable.'],
+    ['NOTE','DV360 Spend is revenue_advertiser, not media cost.'],
+    ['NOTE','Publisher buys (Architectural Digest, Samsung) are included in Spend, Impressions, Clicks, CTR and CPM. They report no reach or views, so they are EXCLUDED from Reach, Frequency, Views, VTR and CPV.'], [],
+    B_HDR, bRow('Overall', ov)
+  ].concat(pt.active.map(p => bRow(p.label, pt.byPlat[p.key]))), ['Kohler Branding Tracker']), 'Overall');
+
+  const {mkts,B} = marketBuckets();
+  XLSX.utils.book_append_sheet(wb, sheetFrom(mkts.map(m => bRow(m, derive(B[m]))), B_HDR), 'By Market');
+
+  XLSX.utils.book_append_sheet(wb, sheetFrom(
+    groupBy(S.dv.day, r=>r.item).map(g => bRow(g.key, derive(g.b))), B_HDR), 'DV360 Line Items');
+  XLSX.utils.book_append_sheet(wb, sheetFrom(
+    groupBy(S.mt.ad, r=>r.item).map(g => bRow(g.key, derive(g.b))), B_HDR), 'Meta Ads');
+  XLSX.utils.book_append_sheet(wb, sheetFrom(
+    groupBy(S.li.cr, r=>r.item).map(g => bRow(g.key, derive(g.b))), B_HDR), 'LinkedIn Creatives');
+
+  CONFIG.PUBLISHERS.forEach(pub => {
+    const rows = S.pub[pub.key] || [];
+    if(!rows.length) return;
+    const daily = rows.slice().sort((a,b)=>a.date<b.date?-1:1).map(r => {
+      const d = derive(addTo(bucket(), r));
+      return [r.date, d.spend, d.impressions, d.clicks, d.ctr, d.cpm];
+    });
+    const b = derive(rows.reduce((a,r)=>addTo(a,r), bucket()));
+    const sheet = [['Date','Spend','Impressions','Clicks','CTR','CPM']].concat(daily)
+      .concat([['Total', b.spend, b.impressions, b.clicks, b.ctr, b.cpm]]);
+    if(pub.plan){
+      sheet.push([], ['Plan vs Achieved','Plan','Achieved']);
+      sheet.push(['Budget', pub.plan.budget, b.spend]);
+      sheet.push(['Impressions', pub.plan.impressions, b.impressions]);
+      sheet.push(['Clicks', pub.plan.clicks, b.clicks]);
+      sheet.push(['CTR', pub.plan.ctr, b.ctr]);
+      sheet.push(['Unit cost', pub.plan.unitCost, b.cpm]);
+      sheet.push(['NOTE','Reach, Frequency, Views and VTR are not reported by this publisher.']);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet), pub.label.slice(0,28));
+  });
+
+  const day = groupBy(allRows().filter(r=>r.date), r=>r.date).sort((a,b)=>a.key<b.key?-1:1);
+  XLSX.utils.book_append_sheet(wb, sheetFrom(
+    day.map(g => bRow(g.key, derive(g.b))), B_HDR), 'Day on Day');
+
+  XLSX.writeFile(wb, 'Kohler_Branding_'+S.range.from+'_to_'+S.range.to+'.xlsx');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════ */
+document.getElementById('d1').addEventListener('change', load);
+document.getElementById('d2').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

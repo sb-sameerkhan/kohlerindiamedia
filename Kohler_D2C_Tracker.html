@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler D2C Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f1f5;color:#1A1A2E;font-size:12px;}
+
+/* HEADER */
+.hdr{background:#1A1A2E;color:#fff;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:50;}
+.hdr-l{display:flex;align-items:center;gap:10px;}
+.redbar{width:4px;height:26px;background:#CC0000;border-radius:2px;flex-shrink:0;}
+.hdr h1{font-size:14px;font-weight:700;color:#fff;}
+.hdr-sub{font-size:10px;color:#8a93b2;margin-top:1px;}
+.hdr-r{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+
+/* RANGE PILLS */
+.range-pills{display:flex;gap:4px;}
+.rpill{background:#2a2d45;color:#aab;border:1px solid #3a3f60;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:.15s;}
+.rpill.active,.rpill:hover{background:#CC0000;color:#fff;border-color:#CC0000;}
+.custom-dates{display:flex;align-items:center;gap:4px;}
+.custom-dates input{background:#2a2d45;border:1px solid #3a3f60;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;}
+.custom-dates input::-webkit-calendar-picker-indicator{filter:invert(1);}
+.btn{background:#CC0000;color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.btn:hover{background:#aa0000;}
+.btn:disabled{background:#666;cursor:not-allowed;}
+
+/* LOADING */
+.loading{position:fixed;inset:0;background:rgba(240,241,245,.88);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:10px;}
+.spinner{width:28px;height:28px;border:3px solid #ddd;border-top-color:#CC0000;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#555;font-size:12px;}
+.hidden{display:none!important;}
+
+/* MAIN TABS */
+.tabs-bar{background:#fff;border-bottom:1px solid #e0e0e0;display:flex;padding:0 18px;}
+.tbbtn{padding:9px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap;}
+.tbbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;}
+.tab{display:none;padding:14px 18px 20px;}
+.tab.active{display:block;}
+
+/* SUMMARY STRIP */
+.sstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:12px;}
+.scard{background:#fff;border-radius:6px;padding:10px 12px;border-top:3px solid #e0e0e0;}
+.scard.all{border-top-color:#1A1A2E;}
+.scard.meta{border-top-color:#1877F2;}
+.scard.goog{border-top-color:#34A853;}
+.scard .lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.scard .val{font-size:18px;font-weight:800;color:#1A1A2E;line-height:1;}
+.scard .sub{font-size:9px;color:#aaa;margin-top:3px;}
+.scard .sub b{color:#666;}
+
+/* PLATFORM PANELS */
+.ppanels{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.ppanel{background:#fff;border-radius:6px;overflow:hidden;}
+.ppanel-hdr{padding:8px 14px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;letter-spacing:.3px;}
+.ppanel-hdr.meta-h{background:#1877F2;color:#fff;}
+.ppanel-hdr.goog-h{background:#34A853;color:#fff;}
+.ppanel-body{padding:12px 14px;}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
+.mbox{text-align:center;}
+.mbox .ml{font-size:9px;color:#bbb;text-transform:uppercase;letter-spacing:.4px;}
+.mbox .mv{font-size:15px;font-weight:800;color:#1A1A2E;margin-top:2px;}
+.mbox .ms{font-size:9px;color:#999;margin-top:1px;}
+.funnel{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #f0f0f0;}
+.fstep{flex:1;text-align:center;}
+.fstep .fn{font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.4px;}
+.fstep .fv{font-size:13px;font-weight:700;color:#1A1A2E;margin-top:2px;}
+.fstep .fp{font-size:9px;color:#999;margin-top:1px;}
+.farr{color:#ddd;font-size:14px;flex-shrink:0;}
+
+/* CHART */
+.chart-card{background:#fff;border-radius:6px;padding:12px 14px;}
+.chart-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.chart-hdr h3{font-size:11px;font-weight:700;}
+.cleg{display:flex;gap:12px;}
+.cleg-i{display:flex;align-items:center;gap:4px;font-size:10px;color:#666;}
+.cdot{width:8px;height:8px;border-radius:50%;}
+canvas{max-height:150px;}
+
+/* TABLES */
+.table-card{background:#fff;border-radius:6px;overflow:hidden;}
+.ttabs{display:flex;border-bottom:1px solid #eee;background:#fafafa;}
+.ttbtn{padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;}
+.ttbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;background:#fff;}
+.tcontent{display:none;}
+.tcontent.active{display:block;}
+.twrap{overflow-x:auto;max-height:380px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{position:sticky;top:0;background:#f5f6fa;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:right;font-weight:700;border-bottom:1px solid #eaeaea;white-space:nowrap;}
+th:first-child{text-align:left;min-width:140px;}
+td{padding:5px 9px;text-align:right;border-bottom:1px solid #f5f5f5;color:#444;white-space:nowrap;}
+td:first-child{text-align:left;color:#1A1A2E;font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis;}
+tr:hover td{background:#fafafa;}
+.red{color:#CC0000;font-weight:700;}
+.grn{color:#34A853;font-weight:700;}
+.yllw{color:#e08a00;font-weight:700;}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:3px;vertical-align:middle;}
+.b-pmax{background:#f3e8ff;color:#7c3aed;}
+.b-shop{background:#fff0f0;color:#CC0000;}
+.b-srch{background:#e8f4fd;color:#0284c7;}
+.b-dgen{background:#fce7f3;color:#db2777;}
+.b-pros{background:#e8f4fd;color:#1877F2;}
+.b-look{background:#f0faf0;color:#34A853;}
+.b-rema{background:#fff8e1;color:#e08a00;}
+.b-oth{background:#f0f0f0;color:#666;}
+
+/* WEEKLY SECTION */
+.wsub{display:flex;border-bottom:1px solid #eee;padding:0 14px;background:#fafafa;}
+.wsb{padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;}
+.wsb.active{color:#1A1A2E;border-bottom-color:#1877F2;background:#fff;}
+.wcontent{display:none;padding:0;}
+.wcontent.active{display:block;}
+
+/* SECTION TITLE */
+.stitle{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+
+/* EMPTY */
+.empty{padding:24px;text-align:center;color:#aaa;font-size:12px;}
+</style>
+</head>
+<body>
+
+<div class="loading hidden" id="loader">
+  <div class="spinner"></div>
+  <p id="loaderMsg">Fetching Kohler D2C data…</p>
+</div>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="redbar"></div>
+    <div>
+      <div class="hdr h1" style="font-size:14px;font-weight:700;color:#fff;">Kohler D2C Tracker</div>
+      <div class="hdr-sub">Meta D2C · Google Ads (excl. Branding)</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div class="range-pills">
+      <button class="rpill active" onclick="setRange('yesterday')">Yesterday</button>
+      <button class="rpill" onclick="setRange('7d')">7D</button>
+      <button class="rpill" onclick="setRange('14d')">14D</button>
+      <button class="rpill" onclick="setRange('30d')">30D</button>
+    </div>
+    <div class="custom-dates">
+      <input type="date" id="d1"> <span style="color:#aaa;font-size:10px;">–</span> <input type="date" id="d2">
+    </div>
+    <button class="btn" id="refreshBtn" onclick="load()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tbbtn active" onclick="switchTab('overview')">Overview</button>
+  <button class="tbbtn" onclick="switchTab('daily')">Daily Table</button>
+  <button class="tbbtn" onclick="switchTab('weekly')">Weekly Split</button>
+  <button class="tbbtn" onclick="switchTab('campaigns')">Campaigns</button>
+</div>
+
+<!-- OVERVIEW TAB -->
+<div class="tab active" id="tab-overview">
+  <div class="sstrip" style="grid-template-columns:repeat(6,1fr);" id="summaryStrip">
+    <div class="scard all"><div class="lbl">Total Spend</div><div class="val" id="s_spend">—</div><div class="sub" id="s_spend_s">—</div></div>
+    <div class="scard all"><div class="lbl">Purchases</div><div class="val" id="s_purch">—</div><div class="sub" id="s_purch_s">—</div></div>
+    <div class="scard all"><div class="lbl">Revenue</div><div class="val" id="s_rev">—</div><div class="sub" id="s_rev_s">—</div></div>
+    <div class="scard all"><div class="lbl">ROAS</div><div class="val" id="s_roas">—</div><div class="sub" id="s_roas_s">—</div></div>
+    <div class="scard all"><div class="lbl">Conv. Rate</div><div class="val" id="s_cvr">—</div><div class="sub">Purchases / Clicks</div></div>
+    <div class="scard all"><div class="lbl">AOV</div><div class="val" id="s_aov">—</div><div class="sub">Revenue / Purchase</div></div>
+  </div>
+
+  <div class="ppanels">
+    <!-- META PANEL -->
+    <div class="ppanel">
+      <div class="ppanel-hdr meta-h">
+        <span style="font-size:13px;font-weight:900;">f</span> Meta Ads — D2C Only
+      </div>
+      <div class="ppanel-body">
+        <div class="mgrid">
+          <div class="mbox"><div class="ml">Spend</div><div class="mv" id="m_spend">—</div></div>
+          <div class="mbox"><div class="ml">Impressions</div><div class="mv" id="m_imps">—</div></div>
+          <div class="mbox"><div class="ml">Clicks</div><div class="mv" id="m_clicks">—</div></div>
+          <div class="mbox"><div class="ml">CPM</div><div class="mv" id="m_cpm">—</div></div>
+          <div class="mbox"><div class="ml">CTR</div><div class="mv" id="m_ctr">—</div></div>
+          <div class="mbox"><div class="ml">CPC</div><div class="mv" id="m_cpc">—</div></div>
+          <div class="mbox"><div class="ml">ROAS</div><div class="mv" id="m_roas">—</div></div>
+          <div class="mbox"><div class="ml">AOV</div><div class="mv" id="m_aov">—</div></div>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><div class="fn">Add to Cart</div><div class="fv" id="m_atc">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Checkout</div><div class="fv" id="m_chk">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Purchases</div><div class="fv" id="m_purch">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Revenue</div><div class="fv" id="m_rev">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CVR</div><div class="fv" id="m_cvr">—</div><div class="fp">Purch/Click</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GOOGLE PANEL -->
+    <div class="ppanel">
+      <div class="ppanel-hdr goog-h">
+        <span style="font-size:13px;font-weight:900;">G</span> Google Ads — D2C (excl. Branding)
+      </div>
+      <div class="ppanel-body">
+        <div class="mgrid">
+          <div class="mbox"><div class="ml">Spend</div><div class="mv" id="g_spend">—</div></div>
+          <div class="mbox"><div class="ml">Impressions</div><div class="mv" id="g_imps">—</div></div>
+          <div class="mbox"><div class="ml">Clicks</div><div class="mv" id="g_clicks">—</div></div>
+          <div class="mbox"><div class="ml">CPM</div><div class="mv" id="g_cpm">—</div></div>
+          <div class="mbox"><div class="ml">CTR</div><div class="mv" id="g_ctr">—</div></div>
+          <div class="mbox"><div class="ml">CPC</div><div class="mv" id="g_cpc">—</div></div>
+          <div class="mbox"><div class="ml">ROAS</div><div class="mv" id="g_roas">—</div></div>
+          <div class="mbox"><div class="ml">AOV</div><div class="mv" id="g_aov">—</div></div>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><div class="fn">Conversions</div><div class="fv" id="g_conv">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Revenue</div><div class="fv" id="g_rev">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CVR</div><div class="fv" id="g_cvr">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CPA</div><div class="fv" id="g_cpa">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Campaigns</div><div class="fv" id="g_camps">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-hdr">
+      <h3 id="chartTitle">Daily Spend Trend</h3>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="cleg">
+          <div class="cleg-i"><div class="cdot" style="background:#1877F2"></div>Meta</div>
+          <div class="cleg-i"><div class="cdot" style="background:#34A853"></div>Google</div>
+        </div>
+        <div class="range-pills" style="gap:4px;">
+          <button class="rpill active" id="mpill-spend" onclick="switchMetric('spend',this)">Spend</button>
+          <button class="rpill" id="mpill-cpc" onclick="switchMetric('cpc',this)">CPC</button>
+          <button class="rpill" id="mpill-roas" onclick="switchMetric('roas',this)">ROAS</button>
+          <button class="rpill" id="mpill-cvr" onclick="switchMetric('cvr',this)">Conv Rate</button>
+        </div>
+      </div>
+    </div>
+    <div style="position:relative;height:160px;width:100%;">
+      <canvas id="trendChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- DAILY TABLE TAB -->
+<div class="tab" id="tab-daily">
+  <div class="stitle">Day-by-Day Performance</div>
+  <div class="table-card">
+    <div class="ttabs">
+      <button class="ttbtn active" onclick="switchSub('daily','overall')">Overall</button>
+      <button class="ttbtn" onclick="switchSub('daily','meta')">Meta</button>
+      <button class="ttbtn" onclick="switchSub('daily','google')">Google</button>
+    </div>
+    <div class="tcontent active" id="dt-overall">
+      <div class="twrap"><table><thead id="dth-overall"></thead><tbody id="dtb-overall"></tbody></table></div>
+    </div>
+    <div class="tcontent" id="dt-meta">
+      <div class="twrap"><table><thead id="dth-meta"></thead><tbody id="dtb-meta"></tbody></table></div>
+    </div>
+    <div class="tcontent" id="dt-google">
+      <div class="twrap"><table><thead id="dth-google"></thead><tbody id="dtb-google"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- WEEKLY SPLIT TAB -->
+<div class="tab" id="tab-weekly">
+  <div class="stitle">Week-over-Week Split</div>
+  <div class="table-card">
+    <div class="wsub">
+      <button class="wsb active" onclick="switchWk('overall')">Overall</button>
+      <button class="wsb" onclick="switchWk('meta')">Meta</button>
+      <button class="wsb" onclick="switchWk('google')">Google</button>
+    </div>
+    <div class="wcontent active" id="wk-overall">
+      <div class="twrap"><table><thead id="wth-overall"></thead><tbody id="wtb-overall"></tbody></table></div>
+    </div>
+    <div class="wcontent" id="wk-meta">
+      <div class="twrap"><table><thead id="wth-meta"></thead><tbody id="wtb-meta"></tbody></table></div>
+    </div>
+    <div class="wcontent" id="wk-google">
+      <div class="twrap"><table><thead id="wth-google"></thead><tbody id="wtb-google"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<!-- CAMPAIGNS TAB -->
+<div class="tab" id="tab-campaigns">
+  <div class="stitle">Campaign Performance</div>
+  <div class="table-card">
+    <div class="ttabs">
+      <button class="ttbtn active" onclick="switchSub('camp','meta')">Meta D2C</button>
+      <button class="ttbtn" onclick="switchSub('camp','google')">Google D2C</button>
+    </div>
+    <div class="tcontent active" id="ct-meta">
+      <div class="twrap">
+        <table>
+          <thead><tr>
+            <th>Campaign</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th>
+            <th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>ROAS</th>
+          </tr></thead>
+          <tbody id="ctb-meta"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="tcontent" id="ct-google">
+      <div class="twrap">
+        <table>
+          <thead><tr>
+            <th>Campaign</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th>
+            <th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CPA</th><th>ROAS</th>
+          </tr></thead>
+          <tbody id="ctb-google"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+const S = { meta:[], google:[], from:'', to:'' };
+
+// ─── Manual conversion overrides ─────────────────────────
+// Use these when Google Ads conversion tracking is misconfigured for a date.
+// conversions_value (revenue) is kept as-is from the platform.
+const CONV_OVERRIDES = {
+  '2026-06-05': 16,
+  '2026-06-06': 41,
+};
+
+function applyConversionOverrides(rows) {
+  // Group rows by date
+  const byDateMap = {};
+  rows.forEach(r => { (byDateMap[r.date] = byDateMap[r.date]||[]).push(r); });
+
+  const out = [];
+  Object.entries(byDateMap).forEach(([date, dayRows]) => {
+    const override = CONV_OVERRIDES[date];
+    if (override === undefined) { out.push(...dayRows); return; }
+    // Scale each campaign's conversions proportionally so the day total = override
+    const origTotal = dayRows.reduce((s,r) => s + (parseFloat(r.conversions)||0), 0);
+    const scale = origTotal > 0 ? override / origTotal : 0;
+    dayRows.forEach(r => out.push({
+      ...r,
+      conversions: (parseFloat(r.conversions)||0) * scale,
+      _overridden: true
+    }));
+  });
+  return out;
+}
+let trendInst = null;
+
+// ─── Formatters ──────────────────────────────────────────
+const rs = n => { if(n==null||isNaN(n))return'—'; if(n>=10000000)return'₹'+(n/10000000).toFixed(1)+'Cr'; if(n>=100000)return'₹'+(n/100000).toFixed(1)+'L'; if(n>=1000)return'₹'+(n/1000).toFixed(1)+'K'; return'₹'+n.toFixed(0); };
+const rss = n => { if(n==null||isNaN(n))return'—'; if(n>=10000000)return'₹'+(n/10000000).toFixed(2)+'Cr'; if(n>=100000)return'₹'+(n/100000).toFixed(1)+'L'; if(n>=1000)return'₹'+(n/1000).toFixed(1)+'K'; return'₹'+n.toFixed(0); };
+const num = (n,d=0)=>{ if(n==null||isNaN(n))return'—'; if(n>=10000000)return(n/10000000).toFixed(1)+'Cr'; if(n>=100000)return(n/100000).toFixed(1)+'L'; if(n>=1000)return(n/1000).toFixed(1)+'K'; return n.toFixed(d); };
+const pct = n=>{ if(n==null||isNaN(n)||n===0)return'—'; return(n*100).toFixed(2)+'%'; };
+const pctR = n=>{ if(n==null||isNaN(n)||n===0)return'—'; return(n*100).toFixed(2)+'%'; };
+const roas= n=>{ if(!n||n<=0)return'—'; return n.toFixed(2)+'x'; };
+const safe= n=>parseFloat(n)||0;
+const sum=(arr,k)=>arr.reduce((a,r)=>a+safe(r[k]),0);
+
+function calcMetrics(rows, platform) {
+  const spend  = sum(rows,'spend');
+  const imps   = sum(rows,'impressions');
+  const clicks = sum(rows,'clicks');
+  const cpm    = imps>0 ? spend/imps*1000 : 0;
+  const ctr    = imps>0 ? clicks/imps : 0;
+  const cpc    = clicks>0 ? spend/clicks : 0;
+
+  if(platform==='meta') {
+    const atc  = sum(rows,'actions_omni_add_to_cart');
+    const chk  = sum(rows,'actions_omni_initiated_checkout');
+    const purch= sum(rows,'actions_omni_purchase');
+    const rev  = sum(rows,'action_values_omni_purchase');
+    const roasV= spend>0&&rev>0 ? rev/spend : 0;
+    const aov  = purch>0 ? rev/purch : 0;
+    const cvr  = clicks>0&&purch>0 ? purch/clicks : 0;
+    return {spend,imps,clicks,cpm,ctr,cpc,atc,chk,purch,rev,roas:roasV,aov,cvr};
+  }
+  if(platform==='google') {
+    const conv = sum(rows,'conversions');
+    const rev  = sum(rows,'conversions_value');
+    const roasV= spend>0&&rev>0 ? rev/spend : 0;
+    const aov  = conv>0 ? rev/conv : 0;
+    const cvr  = clicks>0&&conv>0 ? conv/clicks : 0;
+    const cpa  = conv>0 ? spend/conv : 0;
+    return {spend,imps,clicks,cpm,ctr,cpc,conv,rev,roas:roasV,aov,cvr,cpa};
+  }
+  return {spend,imps,clicks,cpm,ctr,cpc};
+}
+
+// ─── Date helpers ─────────────────────────────────────────
+function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+function isoDate(d){ return d.toISOString().split('T')[0]; }
+function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return isoDate(d); }
+function getWeek(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1);
+  const mon=new Date(d.setDate(diff));
+  const sun=new Date(mon); sun.setDate(sun.getDate()+6);
+  return isoDate(mon)+' – '+fmtDate(isoDate(sun));
+}
+
+// ─── Range setter ────────────────────────────────────────
+function setRange(r) {
+  document.querySelectorAll('.rpill').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  const d1=document.getElementById('d1'), d2=document.getElementById('d2');
+  if(r==='yesterday'){ d1.value=daysAgo(1); d2.value=daysAgo(1); }
+  else if(r==='7d'){ d1.value=daysAgo(7); d2.value=daysAgo(1); }
+  else if(r==='14d'){ d1.value=daysAgo(14); d2.value=daysAgo(1); }
+  else if(r==='30d'){ d1.value=daysAgo(30); d2.value=daysAgo(1); }
+  load();
+}
+
+// ─── Tab switches ─────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tbbtn').forEach((b,i)=>{
+    const tabs=['overview','daily','weekly','campaigns'];
+    b.classList.toggle('active', tabs[i]===name);
+  });
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+function switchSub(group, name) {
+  const prefix = group==='daily'? 'dt' : 'ct';
+  event.target.closest('.table-card').querySelectorAll('.ttbtn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  event.target.closest('.table-card').querySelectorAll('.tcontent').forEach(el=>el.classList.remove('active'));
+  document.getElementById(prefix+'-'+name).classList.add('active');
+}
+function switchWk(name) {
+  document.querySelectorAll('.wsb').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.wcontent').forEach(el=>el.classList.remove('active'));
+  document.getElementById('wk-'+name).classList.add('active');
+}
+
+// ─── Aggregate by date ───────────────────────────────────
+function byDate(rows, platform) {
+  const m={};
+  rows.forEach(r=>{
+    if(!m[r.date]) m[r.date]={date:r.date,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,
+      actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};
+    const d=m[r.date];
+    d.spend+=safe(r.spend); d.impressions+=safe(r.impressions); d.clicks+=safe(r.clicks);
+    if(platform==='meta'){
+      d.actions_omni_add_to_cart+=safe(r.actions_omni_add_to_cart);
+      d.actions_omni_initiated_checkout+=safe(r.actions_omni_initiated_checkout);
+      d.actions_omni_purchase+=safe(r.actions_omni_purchase);
+      d.action_values_omni_purchase+=safe(r.action_values_omni_purchase);
+    } else {
+      d.conversions+=safe(r.conversions);
+      d.conversions_value+=safe(r.conversions_value);
+    }
+  });
+  return Object.values(m).sort((a,b)=>a.date>b.date?1:-1);
+}
+
+function byWeek(rows, platform) {
+  const dated = byDate(rows, platform);
+  const m={};
+  dated.forEach(r=>{
+    const wk=getWeek(r.date);
+    if(!m[wk]){m[wk]={week:wk,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,
+      actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};}
+    const d=m[wk];
+    d.spend+=r.spend; d.impressions+=r.impressions; d.clicks+=r.clicks;
+    d.actions_omni_add_to_cart+=r.actions_omni_add_to_cart;
+    d.actions_omni_initiated_checkout+=r.actions_omni_initiated_checkout;
+    d.actions_omni_purchase+=r.actions_omni_purchase;
+    d.action_values_omni_purchase+=r.action_values_omni_purchase;
+    d.conversions+=r.conversions;
+    d.conversions_value+=r.conversions_value;
+  });
+  return Object.values(m);
+}
+
+function byCampaign(rows, platform) {
+  const m={};
+  rows.forEach(r=>{
+    const key=r.campaign_name;
+    if(!m[key]) m[key]={campaign_name:key,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,
+      actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};
+    const d=m[key];
+    d.spend+=safe(r.spend); d.impressions+=safe(r.impressions); d.clicks+=safe(r.clicks);
+    if(platform==='meta'){
+      d.actions_omni_add_to_cart+=safe(r.actions_omni_add_to_cart);
+      d.actions_omni_initiated_checkout+=safe(r.actions_omni_initiated_checkout);
+      d.actions_omni_purchase+=safe(r.actions_omni_purchase);
+      d.action_values_omni_purchase+=safe(r.action_values_omni_purchase);
+    } else {
+      d.conversions+=safe(r.conversions);
+      d.conversions_value+=safe(r.conversions_value);
+    }
+  });
+  return Object.values(m).sort((a,b)=>b.spend-a.spend);
+}
+
+// ─── Render helpers ──────────────────────────────────────
+function metaTypeBadge(name){
+  if(/Remarketing|DPA/i.test(name)) return '<span class="badge b-rema">RMK</span>';
+  if(/Lookalike/i.test(name)) return '<span class="badge b-look">LAL</span>';
+  return '<span class="badge b-pros">PRO</span>';
+}
+function googleTypeBadge(name){
+  if(/Pmax|PMax/i.test(name)) return '<span class="badge b-pmax">PMax</span>';
+  if(/Shopping/i.test(name)) return '<span class="badge b-shop">Shop</span>';
+  if(/Search/i.test(name)) return '<span class="badge b-srch">Search</span>';
+  if(/DemandGen|Demandgen/i.test(name)) return '<span class="badge b-dgen">DGen</span>';
+  return '<span class="badge b-oth">Other</span>';
+}
+
+function cpaClass(v){ if(!v||v<=0)return''; return v>10000?'red':v<3000?'grn':''; }
+function roasClass(v){ if(!v||v<=0)return''; return v<1?'red':v>=3?'grn':''; }
+function ctrClass(v){ if(!v)return''; return v<0.005?'red':v>0.03?'grn':''; }
+
+// ─── Render Summary Strip (6 KPIs) ───────────────────────
+function renderSummary(meta, google) {
+  const m = calcMetrics(meta,'meta');
+  const g = calcMetrics(google,'google');
+  const totalSpend = m.spend + g.spend;
+  const totalRev   = m.rev + g.rev;
+  const totalPurch = m.purch + g.conv;
+  const totalClicks= m.clicks + g.clicks;
+  const totalROAS  = totalSpend>0&&totalRev>0 ? totalRev/totalSpend : 0;
+  const totalAOV   = totalPurch>0 ? totalRev/totalPurch : 0;
+  const totalCVR   = totalClicks>0&&totalPurch>0 ? totalPurch/totalClicks : 0;
+
+  document.getElementById('s_spend').textContent = rs(totalSpend);
+  document.getElementById('s_spend_s').innerHTML = `<b>M:</b> ${rs(m.spend)} &nbsp;<b>G:</b> ${rs(g.spend)}`;
+  document.getElementById('s_purch').textContent = num(totalPurch,1);
+  document.getElementById('s_purch_s').innerHTML = `<b>M:</b> ${num(m.purch,1)} &nbsp;<b>G:</b> ${num(g.conv,1)}`;
+  document.getElementById('s_rev').textContent   = rs(totalRev);
+  document.getElementById('s_rev_s').innerHTML   = `<b>M:</b> ${rs(m.rev)} &nbsp;<b>G:</b> ${rs(g.rev)}`;
+  document.getElementById('s_roas').textContent  = roas(totalROAS);
+  document.getElementById('s_roas_s').innerHTML  = `<b>M:</b> ${roas(m.roas)} &nbsp;<b>G:</b> ${roas(g.roas)}`;
+  document.getElementById('s_cvr').textContent   = pct(totalCVR);
+  document.getElementById('s_aov').textContent   = rs(totalAOV);
+}
+
+// ─── Render Platform Panels ──────────────────────────────
+function renderPanels(meta, google) {
+  const m = calcMetrics(meta,'meta');
+  const g = calcMetrics(google,'google');
+
+  document.getElementById('m_spend').textContent = rs(m.spend);
+  document.getElementById('m_imps').textContent  = num(m.imps);
+  document.getElementById('m_clicks').textContent= num(m.clicks);
+  document.getElementById('m_cpm').textContent   = rs(m.cpm);
+  document.getElementById('m_ctr').textContent   = pct(m.ctr);
+  document.getElementById('m_cpc').textContent   = rs(m.cpc);
+  document.getElementById('m_roas').textContent  = roas(m.roas);
+  document.getElementById('m_aov').textContent   = rs(m.aov);
+  document.getElementById('m_atc').textContent   = num(m.atc,0);
+  document.getElementById('m_chk').textContent   = num(m.chk,0);
+  document.getElementById('m_purch').textContent = num(m.purch,1);
+  document.getElementById('m_rev').textContent   = rss(m.rev);
+  document.getElementById('m_cvr').textContent   = pct(m.cvr);
+
+  document.getElementById('g_spend').textContent = rs(g.spend);
+  document.getElementById('g_imps').textContent  = num(g.imps);
+  document.getElementById('g_clicks').textContent= num(g.clicks);
+  document.getElementById('g_cpm').textContent   = rs(g.cpm);
+  document.getElementById('g_ctr').textContent   = pct(g.ctr);
+  document.getElementById('g_cpc').textContent   = rs(g.cpc);
+  document.getElementById('g_roas').textContent  = roas(g.roas);
+  document.getElementById('g_aov').textContent   = rs(g.aov);
+  document.getElementById('g_conv').textContent  = num(g.conv,1);
+  document.getElementById('g_rev').textContent   = rss(g.rev);
+  document.getElementById('g_cvr').textContent   = pct(g.cvr);
+  document.getElementById('g_cpa').textContent   = rs(g.cpa);
+  document.getElementById('g_camps').textContent = google.length > 0 ? [...new Set(google.map(r=>r.campaign_name))].length : '—';
+}
+
+// ─── Trend Chart ─────────────────────────────────────────
+let currentMetric = 'spend';
+
+const metricConfig = {
+  spend:   { label:'Daily Spend Trend',        fmt: v=>`₹${v>=100000?(v/100000).toFixed(1)+'L':v>=1000?(v/1000).toFixed(1)+'K':v.toFixed(0)}`, yFmt: v=>v>=100000?'₹'+(v/100000).toFixed(0)+'L':'₹'+(v/1000).toFixed(0)+'K' },
+  cpc:     { label:'Daily CPC Trend',           fmt: v=>`₹${v.toFixed(2)}`,         yFmt: v=>'₹'+v.toFixed(0) },
+  roas:    { label:'Daily ROAS Trend',          fmt: v=>`${v.toFixed(2)}x`,          yFmt: v=>v.toFixed(1)+'x' },
+  cvr:     { label:'Daily Conversion Rate Trend', fmt: v=>`${v.toFixed(2)}%`,        yFmt: v=>v.toFixed(2)+'%' },
+};
+
+function getDailyMetricVal(row, platform, metric) {
+  const spend=row.spend, clicks=row.clicks;
+  const rev  = platform==='meta' ? row.action_values_omni_purchase : row.conversions_value;
+  const purch= platform==='meta' ? row.actions_omni_purchase       : row.conversions;
+  if(metric==='spend') return +spend.toFixed(0);
+  if(metric==='cpc')   return clicks>0 ? +(spend/clicks).toFixed(2) : 0;
+  if(metric==='roas')  return spend>0&&rev>0 ? +(rev/spend).toFixed(3) : 0;
+  if(metric==='cvr')   return clicks>0&&purch>0 ? +(purch/clicks*100).toFixed(3) : 0;
+  return 0;
+}
+
+function switchMetric(metric, btn) {
+  currentMetric = metric;
+  document.querySelectorAll('[id^="mpill-"]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrend(S.meta, S.google);
+}
+
+function renderTrend(meta, google) {
+  const mDates = byDate(meta,'meta');
+  const gDates = byDate(google,'google');
+  const allDates=[...new Set([...mDates.map(r=>r.date),...gDates.map(r=>r.date)])].sort();
+  const mMap=Object.fromEntries(mDates.map(r=>[r.date,r]));
+  const gMap=Object.fromEntries(gDates.map(r=>[r.date,r]));
+  const cfg=metricConfig[currentMetric];
+  const labels=allDates.map(fmtDate);
+  const mData=allDates.map(d=>mMap[d]?getDailyMetricVal(mMap[d],'meta',currentMetric):null);
+  const gData=allDates.map(d=>gMap[d]?getDailyMetricVal(gMap[d],'google',currentMetric):null);
+  document.getElementById('chartTitle').textContent=cfg.label;
+  if(trendInst){trendInst.destroy();trendInst=null;}
+  const ctx=document.getElementById('trendChart').getContext('2d');
+  trendInst=new Chart(ctx,{type:'line',
+    data:{labels,datasets:[
+      {label:'Meta',   data:mData,spanGaps:true,borderColor:'#1877F2',backgroundColor:'rgba(24,119,242,.07)',borderWidth:2,pointRadius:allDates.length<=10?4:2,tension:.35,fill:true},
+      {label:'Google', data:gData,spanGaps:true,borderColor:'#34A853',backgroundColor:'rgba(52,168,83,.07)', borderWidth:2,pointRadius:allDates.length<=10?4:2,tension:.35,fill:true}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${cfg.fmt(c.raw)}`}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkipPadding:8}},
+        y:{grid:{color:'#f0f0f0'},ticks:{font:{size:9},callback:cfg.yFmt}}
+      }
+    }
+  });
+}
+
+// ─── Daily Table ─────────────────────────────────────────
+function renderDailyTable(meta, google) {
+  const mD = byDate(meta,'meta');
+  const gD = byDate(google,'google');
+  const allDates=[...new Set([...mD.map(r=>r.date),...gD.map(r=>r.date)])].sort().reverse();
+  const mMap=Object.fromEntries(mD.map(r=>[r.date,r]));
+  const gMap=Object.fromEntries(gD.map(r=>[r.date,r]));
+
+  // Overall
+  const ohd = `<tr><th>Date</th><th>M Spend</th><th>G Spend</th><th>Total Spend</th><th>Impressions</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>ROAS</th></tr>`;
+  document.getElementById('dth-overall').innerHTML = ohd;
+  const ob = document.getElementById('dtb-overall');
+  ob.innerHTML = '';
+  allDates.forEach(d=>{
+    const m=mMap[d]||{spend:0,impressions:0,clicks:0,actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,actions_omni_purchase:0,action_values_omni_purchase:0};
+    const g=gMap[d]||{spend:0,impressions:0,clicks:0,conversions:0,conversions_value:0};
+    const ts=m.spend+g.spend, ti=m.impressions+g.impressions, tc=m.clicks+g.clicks;
+    const tp=m.actions_omni_purchase+g.conversions, tr_=m.action_values_omni_purchase+g.conversions_value;
+    const tcpm=ti>0?ts/ti*1000:0, tctr=ti>0?tc/ti:0, tcpc=tc>0?ts/tc:0;
+    const tcvr=tc>0&&tp>0?tp/tc:0, taov=tp>0?tr_/tp:0, troas=ts>0&&tr_>0?tr_/ts:0;
+    const ovr = CONV_OVERRIDES[d] !== undefined;
+    const dateLabel = ovr ? `${fmtDate(d)} <span title="Google conversions manually corrected" style="color:#e08a00;font-size:9px;cursor:help;">✱</span>` : fmtDate(d);
+    ob.insertAdjacentHTML('beforeend',`<tr>
+      <td>${dateLabel}</td><td>${rs(m.spend)}</td><td>${rs(g.spend)}</td><td><b>${rs(ts)}</b></td>
+      <td>${num(ti)}</td><td>${num(tc)}</td><td>${rs(tcpm)}</td>
+      <td class="${ctrClass(tctr)}">${pct(tctr)}</td><td>${rs(tcpc)}</td>
+      <td>${num(m.actions_omni_add_to_cart,0)}</td><td>${num(m.actions_omni_initiated_checkout,0)}</td>
+      <td>${num(tp,1)}</td><td>${rs(tr_)}</td>
+      <td>${pct(tcvr)}</td><td>${rs(taov)}</td><td class="${roasClass(troas)}">${roas(troas)}</td>
+    </tr>`);
+  });
+
+  // Meta
+  document.getElementById('dth-meta').innerHTML = `<tr><th>Date</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>ROAS</th></tr>`;
+  const mb = document.getElementById('dtb-meta');
+  mb.innerHTML = '';
+  mD.slice().reverse().forEach(r=>{
+    const mets=calcMetrics([r],'meta');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${fmtDate(r.date)}</td><td>${rs(mets.spend)}</td><td>${num(mets.imps)}</td><td>${num(mets.clicks)}</td>
+      <td>${rs(mets.cpm)}</td><td class="${ctrClass(mets.ctr)}">${pct(mets.ctr)}</td><td>${rs(mets.cpc)}</td>
+      <td>${num(mets.atc,0)}</td><td>${num(mets.chk,0)}</td><td>${num(mets.purch,1)}</td>
+      <td>${rs(mets.rev)}</td><td>${pct(mets.cvr)}</td><td>${rs(mets.aov)}</td>
+      <td class="${roasClass(mets.roas)}">${roas(mets.roas)}</td>
+    </tr>`);
+  });
+
+  // Google
+  document.getElementById('dth-google').innerHTML = `<tr><th>Date</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CPA</th><th>ROAS</th></tr>`;
+  const gb = document.getElementById('dtb-google');
+  gb.innerHTML = '';
+  gD.slice().reverse().forEach(r=>{
+    const gm=calcMetrics([r],'google');
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${fmtDate(r.date)}</td><td>${rs(gm.spend)}</td><td>${num(gm.imps)}</td><td>${num(gm.clicks)}</td>
+      <td>${rs(gm.cpm)}</td><td class="${ctrClass(gm.ctr)}">${pct(gm.ctr)}</td><td>${rs(gm.cpc)}</td>
+      <td>${num(gm.conv,1)}</td><td>${rs(gm.rev)}</td><td>${pct(gm.cvr)}</td>
+      <td>${rs(gm.aov)}</td><td class="${cpaClass(gm.cpa)}">${rs(gm.cpa)}</td>
+      <td class="${roasClass(gm.roas)}">${roas(gm.roas)}</td>
+    </tr>`);
+  });
+}
+
+// ─── Weekly Table ─────────────────────────────────────────
+function renderWeekly(meta, google) {
+  const mW = byWeek(meta,'meta');
+  const gW = byWeek(google,'google');
+  const allWeeks=[...new Set([...mW.map(r=>r.week),...gW.map(r=>r.week)])].sort();
+  const mMap=Object.fromEntries(mW.map(r=>[r.week,r]));
+  const gMap=Object.fromEntries(gW.map(r=>[r.week,r]));
+
+  if(allWeeks.length===0){
+    ['overall','meta','google'].forEach(t=>{ document.getElementById('wtb-'+t).innerHTML='<tr><td colspan="14" class="empty">Not enough data for weekly split.</td></tr>'; });
+    return;
+  }
+
+  // Overall
+  document.getElementById('wth-overall').innerHTML = `<tr><th>Week</th><th>M Spend</th><th>G Spend</th><th>Total Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Purchases</th><th>Revenue</th><th>ROAS</th><th>AOV</th></tr>`;
+  const ob=document.getElementById('wtb-overall'); ob.innerHTML='';
+  allWeeks.forEach(wk=>{
+    const m=mMap[wk]||{spend:0,impressions:0,clicks:0,actions_omni_add_to_cart:0,actions_omni_purchase:0,action_values_omni_purchase:0};
+    const g=gMap[wk]||{spend:0,impressions:0,clicks:0,conversions:0,conversions_value:0};
+    const ts=m.spend+g.spend,ti=m.impressions+g.impressions,tc=m.clicks+g.clicks;
+    const tp=m.actions_omni_purchase+g.conversions,tr_=m.action_values_omni_purchase+g.conversions_value;
+    const tcpm=ti>0?ts/ti*1000:0,tctr=ti>0?tc/ti:0,tcpc=tc>0?ts/tc:0;
+    const troas=ts>0&&tr_>0?tr_/ts:0,taov=tp>0?tr_/tp:0;
+    ob.insertAdjacentHTML('beforeend',`<tr>
+      <td style="min-width:130px"><b>${wk}</b></td><td>${rs(m.spend)}</td><td>${rs(g.spend)}</td><td><b>${rs(ts)}</b></td>
+      <td>${num(ti)}</td><td>${num(tc)}</td><td>${rs(tcpm)}</td>
+      <td class="${ctrClass(tctr)}">${pct(tctr)}</td><td>${rs(tcpc)}</td>
+      <td>${num(m.actions_omni_add_to_cart,0)}</td><td>${num(tp,1)}</td>
+      <td>${rs(tr_)}</td><td class="${roasClass(troas)}">${roas(troas)}</td><td>${rs(taov)}</td>
+    </tr>`);
+  });
+
+  // Meta weekly
+  document.getElementById('wth-meta').innerHTML = `<tr><th>Week</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>ROAS</th></tr>`;
+  const mb=document.getElementById('wtb-meta'); mb.innerHTML='';
+  mW.forEach(r=>{
+    const mets=calcMetrics([{...r,impressions:r.impressions,clicks:r.clicks,
+      actions_omni_add_to_cart:r.actions_omni_add_to_cart,actions_omni_initiated_checkout:r.actions_omni_initiated_checkout,
+      actions_omni_purchase:r.actions_omni_purchase,action_values_omni_purchase:r.action_values_omni_purchase}],'meta');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td style="min-width:130px"><b>${r.week}</b></td><td>${rs(mets.spend)}</td><td>${num(mets.imps)}</td><td>${num(mets.clicks)}</td>
+      <td>${rs(mets.cpm)}</td><td class="${ctrClass(mets.ctr)}">${pct(mets.ctr)}</td><td>${rs(mets.cpc)}</td>
+      <td>${num(mets.atc,0)}</td><td>${num(mets.chk,0)}</td><td>${num(mets.purch,1)}</td>
+      <td>${rs(mets.rev)}</td><td>${pct(mets.cvr)}</td><td>${rs(mets.aov)}</td>
+      <td class="${roasClass(mets.roas)}">${roas(mets.roas)}</td>
+    </tr>`);
+  });
+
+  // Google weekly
+  document.getElementById('wth-google').innerHTML = `<tr><th>Week</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CPA</th><th>ROAS</th></tr>`;
+  const gb=document.getElementById('wtb-google'); gb.innerHTML='';
+  gW.forEach(r=>{
+    const gm=calcMetrics([{...r,impressions:r.impressions,clicks:r.clicks,conversions:r.conversions,conversions_value:r.conversions_value}],'google');
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td style="min-width:130px"><b>${r.week}</b></td><td>${rs(gm.spend)}</td><td>${num(gm.imps)}</td><td>${num(gm.clicks)}</td>
+      <td>${rs(gm.cpm)}</td><td class="${ctrClass(gm.ctr)}">${pct(gm.ctr)}</td><td>${rs(gm.cpc)}</td>
+      <td>${num(gm.conv,1)}</td><td>${rs(gm.rev)}</td><td>${pct(gm.cvr)}</td>
+      <td>${rs(gm.aov)}</td><td class="${cpaClass(gm.cpa)}">${rs(gm.cpa)}</td>
+      <td class="${roasClass(gm.roas)}">${roas(gm.roas)}</td>
+    </tr>`);
+  });
+}
+
+// ─── Campaign Tables ──────────────────────────────────────
+function renderCampaigns(meta, google) {
+  const mC = byCampaign(meta,'meta');
+  const gC = byCampaign(google,'google');
+  const mb = document.getElementById('ctb-meta'); mb.innerHTML='';
+  mC.forEach(r=>{
+    const shortName = r.campaign_name.replace(/^\d+_Cheil_Kohler_D2C_/,'').replace(/_/g,' ');
+    const mets=calcMetrics([r],'meta');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td title="${r.campaign_name}">${metaTypeBadge(r.campaign_name)}${shortName}</td>
+      <td>${rs(mets.spend)}</td><td>${num(mets.imps)}</td><td>${num(mets.clicks)}</td>
+      <td>${rs(mets.cpm)}</td><td class="${ctrClass(mets.ctr)}">${pct(mets.ctr)}</td><td>${rs(mets.cpc)}</td>
+      <td>${num(mets.atc,0)}</td><td>${num(mets.chk,0)}</td><td>${num(mets.purch,1)}</td>
+      <td>${rs(mets.rev)}</td><td>${pct(mets.cvr)}</td><td>${rs(mets.aov)}</td>
+      <td class="${roasClass(mets.roas)}">${roas(mets.roas)}</td>
+    </tr>`);
+  });
+  const gb = document.getElementById('ctb-google'); gb.innerHTML='';
+  gC.forEach(r=>{
+    const shortName = r.campaign_name.replace(/^\d+_Cheil_Kohler_/,'').replace(/_/g,' ');
+    const gm=calcMetrics([r],'google');
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td title="${r.campaign_name}">${googleTypeBadge(r.campaign_name)}${shortName}</td>
+      <td>${rs(gm.spend)}</td><td>${num(gm.imps)}</td><td>${num(gm.clicks)}</td>
+      <td>${rs(gm.cpm)}</td><td class="${ctrClass(gm.ctr)}">${pct(gm.ctr)}</td><td>${rs(gm.cpc)}</td>
+      <td>${num(gm.conv,1)}</td><td>${rs(gm.rev)}</td><td>${pct(gm.cvr)}</td>
+      <td>${rs(gm.aov)}</td><td class="${cpaClass(gm.cpa)}">${rs(gm.cpa)}</td>
+      <td class="${roasClass(gm.roas)}">${roas(gm.roas)}</td>
+    </tr>`);
+  });
+}
+
+// ─── Main Load ───────────────────────────────────────────
+async function load() {
+  const from = document.getElementById('d1').value;
+  const to   = document.getElementById('d2').value;
+  if(!from||!to){ alert('Please select a date range.'); return; }
+  S.from=from; S.to=to;
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true;
+  const loader=document.getElementById('loader');
+  loader.classList.remove('hidden');
+  document.getElementById('loaderMsg').textContent='Fetching Kohler D2C data…';
+
+  try {
+    const [mR, gR] = await Promise.all([
+      window.cowork.callMcpTool('mcp__9c3f75bd-907d-43b1-9028-6be2965ddee1__get_data', {
+        connector:'facebook', accounts:['1542147597124356'],
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','cpm','reach','frequency',
+          'actions_omni_add_to_cart','actions_omni_initiated_checkout',
+          'actions_omni_purchase','action_values_omni_purchase'],
+        date_from:from, date_to:to
+      }),
+      window.cowork.callMcpTool('mcp__9c3f75bd-907d-43b1-9028-6be2965ddee1__get_data', {
+        connector:'google_ads', accounts:['924-290-7329'],
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','average_cpm',
+          'conversions','conversions_value','conversion_rate','value_per_conversion','cost_per_conversion'],
+        date_from:from, date_to:to
+      })
+    ]);
+
+    const metaAll  = (mR.structuredContent ?? JSON.parse(mR.content[0].text)).result  || [];
+    const googAll  = (gR.structuredContent ?? JSON.parse(gR.content[0].text)).result  || [];
+
+    S.meta   = metaAll.filter(r => /D2C/i.test(r.campaign_name));
+    S.google = applyConversionOverrides(
+      googAll.filter(r => !/Branding|DemandGen|Demandgen/i.test(r.campaign_name))
+    );
+
+    document.getElementById('loaderMsg').textContent='Rendering…';
+    renderSummary(S.meta, S.google);
+    renderPanels(S.meta, S.google);
+    renderTrend(S.meta, S.google);
+    renderDailyTable(S.meta, S.google);
+    renderWeekly(S.meta, S.google);
+    renderCampaigns(S.meta, S.google);
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('loaderMsg').textContent='Error: '+e.message;
+    setTimeout(()=>loader.classList.add('hidden'),3000);
+  }
+
+  loader.classList.add('hidden');
+  btn.disabled=false;
+}
+
+// ─── Init ────────────────────────────────────────────────
+(function(){
+  const d1=document.getElementById('d1'), d2=document.getElementById('d2');
+  d2.value = daysAgo(1);
+  d1.value = daysAgo(1);
+  load();
+})();
+</script>
+</body>
+</html>

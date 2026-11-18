@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kohler D2C — Meta Weekly Creative Analysis</title>
+<style>
+  :root{
+    --red:#CC0000;
+    --navy:#1A1A2E;
+    --bg:#f4f5f7;
+    --meta-blue:#1877f2;
+    --green:#1e7d32;
+    --amber:#b06a00;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:'Segoe UI',Arial,sans-serif;
+    color:var(--navy);
+    line-height:1.5;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
+
+  /* Header */
+  .header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    flex-wrap:wrap;
+    gap:16px;
+    padding-bottom:20px;
+    border-bottom:2px solid var(--navy);
+    margin-bottom:28px;
+  }
+  .header h1{margin:0 0 6px;font-size:26px;color:var(--navy);}
+  .header .sub{color:#555;font-size:14px;}
+  .badges{display:flex;gap:8px;flex-wrap:wrap;}
+  .badge{
+    display:inline-block;
+    padding:5px 12px;
+    border-radius:3px;
+    font-size:12px;
+    font-weight:600;
+    color:#fff;
+  }
+  .badge.meta{background:var(--meta-blue);}
+  .badge.weekly{background:var(--navy);}
+  .badge.acct{background:#666;font-weight:400;}
+
+  /* KPI strip */
+  .kpi-strip{
+    display:grid;
+    grid-template-columns:repeat(6,1fr);
+    gap:12px;
+    margin-bottom:36px;
+  }
+  .kpi{
+    background:#fff;
+    border-radius:6px;
+    padding:16px 14px;
+    border-left:4px solid var(--navy);
+  }
+  .kpi .label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#777;margin-bottom:6px;}
+  .kpi .value{font-size:20px;font-weight:700;color:var(--navy);}
+  .kpi .sub{font-size:12px;color:#888;margin-top:4px;}
+  .kpi.flag-red{border-left-color:var(--red);}
+  .kpi.flag-red .value{color:var(--red);}
+  .kpi.flag-green{border-left-color:var(--green);}
+
+  section{margin-bottom:42px;}
+  h2{
+    font-size:18px;
+    color:var(--navy);
+    margin:0 0 16px;
+    padding-bottom:8px;
+    border-bottom:1px solid #dcdfe4;
+  }
+  h3{font-size:15px;margin:22px 0 10px;color:var(--navy);}
+
+  /* Format scorecards */
+  .fmt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .fmt-card{background:#fff;border-radius:6px;padding:16px;}
+  .fmt-name{font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+  .fmt-stats{font-size:13px;color:#444;margin-bottom:10px;}
+  .fmt-stats div{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #eee;}
+  .fmt-verdict{font-size:12.5px;color:#555;font-style:normal;}
+
+  /* format badges */
+  .tag{display:inline-block;font-size:10.5px;font-weight:700;color:#fff;padding:2px 7px;border-radius:3px;margin-right:6px;}
+  .tag-static{background:#2f6fb0;}
+  .tag-video{background:#c2185b;}
+  .tag-dpa{background:#6a3fa0;}
+  .tag-carousel{background:#37806b;}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:6px;overflow:hidden;font-size:13px;}
+  thead th{
+    background:var(--navy);
+    color:#fff;
+    text-align:left;
+    padding:10px 12px;
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  tbody td{padding:9px 12px;border-bottom:1px solid #eef0f2;color:#333;}
+  tbody tr:last-child td{border-bottom:none;}
+  .ad-name{font-size:12px;color:var(--navy);font-weight:600;}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;color:#fff;white-space:nowrap;}
+  .pill-scale{background:var(--green);}
+  .pill-pause{background:var(--red);}
+  .pill-watch{background:#b06a00;}
+  .pill-test{background:var(--meta-blue);}
+
+  /* frequency alert */
+  .alert-box{
+    background:#fff8e1;
+    border:1px solid #f0c96a;
+    border-left:5px solid #d99a00;
+    border-radius:6px;
+    padding:16px 18px;
+    font-size:13.5px;
+  }
+  .alert-box .a-title{font-weight:700;color:#8a5c00;margin-bottom:6px;font-size:14px;}
+
+  /* video bars */
+  .video-block{background:#fff;border-radius:6px;padding:16px 18px;margin-bottom:14px;}
+  .video-block .vname{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px;}
+  .video-meta{font-size:12px;color:#777;margin-bottom:10px;}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .bar-label{width:38px;font-size:11.5px;color:#666;text-align:right;}
+  .bar-track{flex:1;background:#eef0f3;border-radius:3px;height:14px;position:relative;}
+  .bar-fill{height:100%;border-radius:3px;background:var(--meta-blue);}
+  .bar-fill.p50{background:#4a90d9;}
+  .bar-fill.p75{background:#7bb0e6;}
+  .bar-fill.p100{background:#b64f7a;}
+  .bar-val{width:52px;font-size:11.5px;color:#444;}
+  .video-note{font-size:12.5px;color:#555;margin-top:8px;padding-top:8px;border-top:1px dashed #eee;}
+
+  /* two column */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  .col-box{background:#fff;border-radius:6px;padding:18px 20px;}
+  .col-box h4{margin:0 0 12px;font-size:14px;}
+  .col-box.working h4{color:var(--green);}
+  .col-box.fixing h4{color:var(--red);}
+  .col-box.stop h4{color:var(--red);}
+  .col-box.unlock h4{color:var(--green);}
+  ol.insights{margin:0;padding-left:20px;font-size:13px;}
+  ol.insights li{margin-bottom:10px;color:#333;}
+
+  .signal{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+  .signal-green{background:var(--green);}
+  .signal-orange{background:#d99a00;}
+  .signal-red{background:var(--red);}
+
+  .footer-note{margin-top:40px;font-size:12px;color:#999;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div>
+      <h1>Kohler India D2C — Meta Ads Creative Analysis</h1>
+      <div class="sub">Weekly performance read across the D2C campaign set</div>
+    </div>
+    <div class="badges">
+      <span class="badge meta">META ADS</span>
+      <span class="badge weekly">WEEKLY · JUL 6–12, 2026</span>
+      <span class="badge acct">Acct 1542147597124356</span>
+    </div>
+  </div>
+
+  <!-- KPI STRIP -->
+  <div class="kpi-strip">
+    <div class="kpi">
+      <div class="label">Total Spend</div>
+      <div class="value">₹2,58,808</div>
+      <div class="sub">across 9 D2C campaigns</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Purchases</div>
+      <div class="value">117</div>
+      <div class="sub">blended CPP ₹2,212</div>
+    </div>
+    <div class="kpi flag-green">
+      <div class="label">Blended ROAS</div>
+      <div class="value">2.43×</div>
+      <div class="sub">revenue ÷ spend</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Add to Cart</div>
+      <div class="value">707</div>
+      <div class="sub">16.5% ATC→Purchase</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Best Format</div>
+      <div class="value">Video</div>
+      <div class="sub">3.27× ROAS · ₹1,760 CPP</div>
+    </div>
+    <div class="kpi flag-red">
+      <div class="label">Wasted Spend</div>
+      <div class="value">₹1,10,307</div>
+      <div class="sub">42.6% of budget, ROAS &lt;1×</div>
+    </div>
+  </div>
+
+  <!-- FORMAT SCORECARDS -->
+  <section>
+    <h2>Format Scorecards</h2>
+    <div class="fmt-grid">
+      <div class="fmt-card">
+        <div class="fmt-name"><span class="tag tag-static">STATIC</span> Static</div>
+        <div class="fmt-stats">
+          <div><span>Spend</span><span>₹1,42,520</span></div>
+          <div><span>Purchases</span><span>56</span></div>
+          <div><span>Avg ROAS</span><span>2.48×</span></div>
+          <div><span>CPP</span><span>₹2,545</span></div>
+          <div><span>ATC</span><span>404</span></div>
+        </div>
+        <div class="fmt-verdict">Carries the most volume (55% of spend) at a solid 2.48× — but drags the biggest single zombie in the account (BeamKitchenFaucet).</div>
+      </div>
+      <div class="fmt-card">
+        <div class="fmt-name"><span class="tag tag-video">VIDEO</span> Video</div>
+        <div class="fmt-stats">
+          <div><span>Spend</span><span>₹70,418</span></div>
+          <div><span>Purchases</span><span>40</span></div>
+          <div><span>Avg ROAS</span><span>3.27×</span></div>
+          <div><span>CPP</span><span>₹1,760</span></div>
+          <div><span>ATC</span><span>179</span></div>
+        </div>
+        <div class="fmt-verdict">Best-performing format on both ROAS and CPP this week. Completion rates are thin (see below), so the win is coming from reach/targeting, not watch-through.</div>
+      </div>
+      <div class="fmt-card">
+        <div class="fmt-name"><span class="tag tag-dpa">DPA</span> DPA</div>
+        <div class="fmt-stats">
+          <div><span>Spend</span><span>₹38,041</span></div>
+          <div><span>Purchases</span><span>18</span></div>
+          <div><span>Avg ROAS</span><span>1.13×</span></div>
+          <div><span>CPP</span><span>₹2,113</span></div>
+          <div><span>ATC</span><span>107</span></div>
+        </div>
+        <div class="fmt-verdict">The 160-product catalogue ad is treading water at 1.13× — broad prospecting DPA, not the sharper remarketing pool.</div>
+      </div>
+      <div class="fmt-card">
+        <div class="fmt-name"><span class="tag tag-carousel">CAROUSEL</span> Carousel</div>
+        <div class="fmt-stats">
+          <div><span>Spend</span><span>₹7,828</span></div>
+          <div><span>Purchases</span><span>3</span></div>
+          <div><span>Avg ROAS</span><span>0.48×</span></div>
+          <div><span>CPP</span><span>₹2,609</span></div>
+          <div><span>ATC</span><span>17</span></div>
+        </div>
+        <div class="fmt-verdict">Weakest format again this week, consistent with the format's track record on this account — one test unit, 0.48× ROAS.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AD LEADERBOARD -->
+  <section>
+    <h2>Ad Leaderboard</h2>
+
+    <h3>🏆 Hero Creatives — scale these</h3>
+    <table>
+      <thead><tr><th>Ad</th><th>Format</th><th class="num">Spend</th><th class="num">Purch.</th><th class="num">ROAS</th><th class="num">CPP</th><th class="num">ATC</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="ad-name">StriveSingleBowl 38779 · Kitchen Sinks</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹20,685</td><td class="num">16</td><td class="num">9.61×</td><td class="num">₹1,293</td><td class="num">80</td>
+          <td><span class="pill pill-scale">SCALE</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">KitchenSink&amp;Faucet CategoryPLP · Video 1</td>
+          <td><span class="tag tag-video">VIDEO</span></td>
+          <td class="num">₹6,790</td><td class="num">4</td><td class="num">15.93×</td><td class="num">₹1,697</td><td class="num">24</td>
+          <td><span class="pill pill-scale">INCREASE BUDGET</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">StriveDoubleBowlSink 38797 · Video 1</td>
+          <td><span class="tag tag-video">VIDEO</span></td>
+          <td class="num">₹22,597</td><td class="num">14</td><td class="num">2.33×</td><td class="num">₹1,614</td><td class="num">48</td>
+          <td><span class="pill pill-scale">SCALE</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">StriveSingleBowl 38796 · Video 1</td>
+          <td><span class="tag tag-video">VIDEO</span></td>
+          <td class="num">₹11,507</td><td class="num">7</td><td class="num">3.05×</td><td class="num">₹1,644</td><td class="num">23</td>
+          <td><span class="pill pill-scale">SCALE</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">BoldDays MallecoPullDown K-562 · Static 1</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹6,525</td><td class="num">1</td><td class="num">3.75×</td><td class="num">₹6,525</td><td class="num">13</td>
+          <td><span class="pill pill-scale">INCREASE BUDGET</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Top40 CuffHealthFaucet 98100 · Static 1</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹2,611</td><td class="num">2</td><td class="num">1.88×</td><td class="num">₹1,306</td><td class="num">5</td>
+          <td><span class="pill pill-scale">INCREASE BUDGET</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>💀 Zombie Creatives — pause now</h3>
+    <table>
+      <thead><tr><th>Ad</th><th>Format</th><th class="num">Spend</th><th class="num">Purch.</th><th class="num">ROAS</th><th>Problem</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="ad-name">Advantage+ BeamKitchenFaucet K-25418 · Static</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹45,110</td><td class="num">12</td><td class="num">0.71×</td>
+          <td>Single biggest spender in the account, sub-1× ROAS all week — 17% of total budget under-returning.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Top40 PurewashM050Bidet 28144 · Video 1</td>
+          <td><span class="tag tag-video">VIDEO</span></td>
+          <td class="num">₹19,470</td><td class="num">8</td><td class="num">0.71×</td>
+          <td>High CPM (₹466-543) for a niche bidet SKU; audience too broad for the price point.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">KitchenSinks StriveSingleBowl 38779 · Carousel 1</td>
+          <td><span class="tag tag-carousel">CAROUSEL</span></td>
+          <td class="num">₹7,156</td><td class="num">3</td><td class="num">0.52×</td>
+          <td>Carousel format underperforming again — same product does 9.6× as a static.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Top40 PurewashM050Bidet 28144 · Static 1</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹7,043</td><td class="num">1</td><td class="num">~0×</td>
+          <td>Same SKU as the video zombie above — the product/audience match is the issue, not the format.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Showering ToobiShowerFaucet 23147 · Static 1</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹6,974</td><td class="num">0</td><td class="num">0×</td>
+          <td>Zero purchases all week despite 40 add-to-carts — funnel is breaking post-ATC.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Toilet OveOnePiece 17629 · Video 1</td>
+          <td><span class="tag tag-video">VIDEO</span></td>
+          <td class="num">₹5,409</td><td class="num">2</td><td class="num">0.49×</td>
+          <td>Strong hook (P25 11%) but conversion isn't following through.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">BoldDays EmilePullDown K-26448 · Static 1</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹5,365</td><td class="num">1</td><td class="num">~0×</td>
+          <td>Sale-tagged creative not converting outside the promo window it was built for.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">BoldDays AtomPullDown K-25981 · Static 2</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹5,173</td><td class="num">2</td><td class="num">0.22×</td>
+          <td>Same BoldDays set as above, same pattern of post-sale drop-off.</td>
+          <td><span class="pill pill-pause">PAUSE NOW</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>⚠️ Watch List — cap or test</h3>
+    <table>
+      <thead><tr><th>Ad</th><th>Format</th><th class="num">Spend</th><th class="num">Purch.</th><th class="num">ROAS</th><th>Observation</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="ad-name">AllProducts DPA · 160 Products</td>
+          <td><span class="tag tag-dpa">DPA</span></td>
+          <td class="num">₹38,041</td><td class="num">18</td><td class="num">1.13×</td>
+          <td>Broad catalogue DPA holding steady but not efficient at this spend level.</td>
+          <td><span class="pill pill-watch">CAP</span></td>
+        </tr>
+        <tr>
+          <td class="ad-name">Remarketing 60Days ATC FocusedProducts</td>
+          <td><span class="tag tag-static">STATIC</span></td>
+          <td class="num">₹36,907</td><td class="num">18</td><td class="num">2.03×</td>
+          <td>Frequency has hit 16.16× — see alert below. ROAS still positive but audience is fatiguing.</td>
+          <td><span class="pill pill-watch">CAP / REFRESH</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- FREQUENCY ALERT -->
+  <section>
+    <h2>Frequency Alert</h2>
+    <div class="alert-box">
+      <div class="a-title">⚠ Audience Saturation — Remarketing_60Days_ATC_FocusedProducts</div>
+      Frequency has reached <strong>16.16×</strong> this week (threshold for saturation is 15×), against a reach of just 11,507 people and CPM of ₹198 — 60% above the account's prospecting CPMs (₹61–127). The same audience is being shown this ad roughly 16 times each. ROAS is still 2.03× today, but this is the classic pattern before a remarketing pool collapses.<br><br>
+      <strong>Recommended action:</strong> reset the remarketing window from 60 days to 14–30 days and refresh the creative before the next spend cycle, rather than waiting for ROAS to drop.
+    </div>
+  </section>
+
+  <!-- VIDEO COMPLETION -->
+  <section>
+    <h2>Video Completion Analysis</h2>
+
+    <div class="video-block">
+      <div class="vname">Toilet OveOnePiece 17629 · Video 1</div>
+      <div class="video-meta">90,276 impressions · retention 13.5% · avg watch 2s</div>
+      <div class="bar-row"><span class="bar-label">P25</span><div class="bar-track"><div class="bar-fill" style="width:11.12%"></div></div><span class="bar-val">11.12%</span></div>
+      <div class="bar-row"><span class="bar-label">P50</span><div class="bar-track"><div class="bar-fill p50" style="width:4.9%"></div></div><span class="bar-val">4.90%</span></div>
+      <div class="bar-row"><span class="bar-label">P75</span><div class="bar-track"><div class="bar-fill p75" style="width:3.75%"></div></div><span class="bar-val">3.75%</span></div>
+      <div class="bar-row"><span class="bar-label">P100</span><div class="bar-track"><div class="bar-fill p100" style="width:1.5%"></div></div><span class="bar-val">1.50%</span></div>
+      <div class="video-note">Strongest hook in the batch (P25 11%) but the steepest drop-off after — viewers click in, then leave fast. Worth a mid-video edit rather than a new hook.</div>
+    </div>
+
+    <div class="video-block">
+      <div class="vname">KitchenSinks StriveDoubleBowlSink 38797 · Video 1</div>
+      <div class="video-meta">285,127 impressions · retention 17.3% · avg watch 1s</div>
+      <div class="bar-row"><span class="bar-label">P25</span><div class="bar-track"><div class="bar-fill" style="width:5.38%"></div></div><span class="bar-val">5.38%</span></div>
+      <div class="bar-row"><span class="bar-label">P50</span><div class="bar-track"><div class="bar-fill p50" style="width:2.94%"></div></div><span class="bar-val">2.94%</span></div>
+      <div class="bar-row"><span class="bar-label">P75</span><div class="bar-track"><div class="bar-fill p75" style="width:1.83%"></div></div><span class="bar-val">1.83%</span></div>
+      <div class="bar-row"><span class="bar-label">P100</span><div class="bar-track"><div class="bar-fill p100" style="width:0.93%"></div></div><span class="bar-val">0.93%</span></div>
+      <div class="video-note">This is the top-spend hero video (₹22,597, 2.33× ROAS) but completion is thin across the board. The 2.33× is coming from reach and targeting, not from people watching the full pitch — a stronger hook could push ROAS higher still.</div>
+    </div>
+
+    <div class="video-block">
+      <div class="vname">KitchenSinks StriveSingleBowl 38796 · Video 1</div>
+      <div class="video-meta">119,259 impressions · retention 22.7% · avg watch 2s</div>
+      <div class="bar-row"><span class="bar-label">P25</span><div class="bar-track"><div class="bar-fill" style="width:5.64%"></div></div><span class="bar-val">5.64%</span></div>
+      <div class="bar-row"><span class="bar-label">P50</span><div class="bar-track"><div class="bar-fill p50" style="width:3.74%"></div></div><span class="bar-val">3.74%</span></div>
+      <div class="bar-row"><span class="bar-label">P75</span><div class="bar-track"><div class="bar-fill p75" style="width:1.58%"></div></div><span class="bar-val">1.58%</span></div>
+      <div class="bar-row"><span class="bar-label">P100</span><div class="bar-track"><div class="bar-fill p100" style="width:1.28%"></div></div><span class="bar-val">1.28%</span></div>
+      <div class="video-note">Best retention ratio of the meaningfully-sized videos — people who cross 25% tend to keep watching. Pairs with a 3.05× ROAS; this is the video to reuse as a creative template.</div>
+    </div>
+
+    <div class="video-block">
+      <div class="vname">Top40 PurewashM050Bidet 28144 · Video 1</div>
+      <div class="video-meta">37,713 impressions · retention 9.4% · avg watch 6s</div>
+      <div class="bar-row"><span class="bar-label">P25</span><div class="bar-track"><div class="bar-fill" style="width:5.88%"></div></div><span class="bar-val">5.88%</span></div>
+      <div class="bar-row"><span class="bar-label">P50</span><div class="bar-track"><div class="bar-fill p50" style="width:4.98%"></div></div><span class="bar-val">4.98%</span></div>
+      <div class="bar-row"><span class="bar-label">P75</span><div class="bar-track"><div class="bar-fill p75" style="width:2.75%"></div></div><span class="bar-val">2.75%</span></div>
+      <div class="bar-row"><span class="bar-label">P100</span><div class="bar-track"><div class="bar-fill p100" style="width:0.55%"></div></div><span class="bar-val">0.55%</span></div>
+      <div class="video-note">Longest average watch time (6s) of any video, but this is also the zombie creative losing money at 0.71× ROAS — people watch, but the bidet doesn't convert cold. Product/audience fit issue, not a creative one.</div>
+    </div>
+
+    <div class="video-block">
+      <div class="vname">Toilet BraznToiletBundle 26994 · Video 1</div>
+      <div class="video-meta">57,158 impressions · retention 27.3% · avg watch 3s</div>
+      <div class="bar-row"><span class="bar-label">P25</span><div class="bar-track"><div class="bar-fill" style="width:9.11%"></div></div><span class="bar-val">9.11%</span></div>
+      <div class="bar-row"><span class="bar-label">P50</span><div class="bar-track"><div class="bar-fill p50" style="width:5.98%"></div></div><span class="bar-val">5.98%</span></div>
+      <div class="bar-row"><span class="bar-label">P75</span><div class="bar-track"><div class="bar-fill p75" style="width:3.32%"></div></div><span class="bar-val">3.32%</span></div>
+      <div class="bar-row"><span class="bar-label">P100</span><div class="bar-track"><div class="bar-fill p100" style="width:2.49%"></div></div><span class="bar-val">2.49%</span></div>
+      <div class="video-note">Highest retention ratio in the account this week (27.3%) — a strong hook that holds. Currently under-spent at ₹3,952; worth a bigger test given the watch-through behaviour.</div>
+    </div>
+  </section>
+
+  <!-- CATEGORY BREAKDOWN -->
+  <section>
+    <h2>Category Breakdown</h2>
+    <table>
+      <thead><tr><th>Category</th><th class="num">Spend</th><th class="num">Purch.</th><th class="num">ROAS</th><th class="num">CPP</th><th class="num">ATC</th><th class="num">IC</th><th class="num">ATC→Purch</th><th>Signal</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Kitchen Sinks &amp; Faucets</td>
+          <td class="num">₹1,13,844</td><td class="num">56</td><td class="num">3.78×</td><td class="num">₹2,033</td><td class="num">273</td><td class="num">64</td><td class="num">20.5%</td>
+          <td><span class="signal signal-green"></span>Scale</td>
+        </tr>
+        <tr>
+          <td>All Products Prospecting (Lookalike DPA)</td>
+          <td class="num">₹38,041</td><td class="num">18</td><td class="num">1.13×</td><td class="num">₹2,113</td><td class="num">107</td><td class="num">27</td><td class="num">16.8%</td>
+          <td><span class="signal signal-orange"></span>Cap</td>
+        </tr>
+        <tr>
+          <td>Remarketing DPA</td>
+          <td class="num">₹36,907</td><td class="num">18</td><td class="num">2.03×</td><td class="num">₹2,050</td><td class="num">132</td><td class="num">31</td><td class="num">13.6%</td>
+          <td><span class="signal signal-orange"></span>Refresh audience</td>
+        </tr>
+        <tr>
+          <td>Top 40 Products</td>
+          <td class="num">₹31,630</td><td class="num">17</td><td class="num">1.52×</td><td class="num">₹1,861</td><td class="num">66</td><td class="num">20</td><td class="num">25.8%</td>
+          <td><span class="signal signal-orange"></span>Test winners</td>
+        </tr>
+        <tr>
+          <td>BoldDays / Sale</td>
+          <td class="num">₹19,724</td><td class="num">5</td><td class="num">1.44×</td><td class="num">₹3,945</td><td class="num">42</td><td class="num">5</td><td class="num">11.9%</td>
+          <td><span class="signal signal-orange"></span>Sale-only, don't extend</td>
+        </tr>
+        <tr>
+          <td>Toilets</td>
+          <td class="num">₹11,688</td><td class="num">3</td><td class="num">0.43×</td><td class="num">₹3,896</td><td class="num">47</td><td class="num">7</td><td class="num">6.4%</td>
+          <td><span class="signal signal-red"></span>Fix or cut</td>
+        </tr>
+        <tr>
+          <td>Showering</td>
+          <td class="num">₹6,974</td><td class="num">0</td><td class="num">0×</td><td class="num">—</td><td class="num">40</td><td class="num">4</td><td class="num">0.0%</td>
+          <td><span class="signal signal-red"></span>Pause</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- CREATIVE PATTERNS -->
+  <section>
+    <h2>Creative Patterns</h2>
+    <div class="two-col">
+      <div class="col-box working">
+        <h4>What's Working</h4>
+        <ol class="insights">
+          <li>Kitchen Sinks &amp; Faucets is carrying the account — 44% of spend, the only category clearing 3×+ blended ROAS (3.78×).</li>
+          <li>Video beats Static on both ROAS (3.27× vs 2.48×) and CPP (₹1,760 vs ₹2,545) this week, even with thin completion rates — the win is in targeting, not watch-through.</li>
+          <li>Top 40 Products has the healthiest funnel of any category — 25.8% ATC→Purchase — the bottleneck there is scale, not conversion.</li>
+          <li>Toilet BraznToiletBundle video has the best retention ratio in the account (27.3%) at only ₹3,952 spend — under-tested relative to its creative strength.</li>
+        </ol>
+      </div>
+      <div class="col-box fixing">
+        <h4>What Needs Fixing</h4>
+        <ol class="insights">
+          <li>Toilets and Showering together burned ₹18,662 for 3 purchases and a 0.35× blended ROAS — Showering converted zero of 40 add-to-carts.</li>
+          <li>Carousel is the weakest format again (0.48× ROAS) — same pattern seen historically on this account; the format doesn't fit D2C intent here.</li>
+          <li>The single biggest line item — BeamKitchenFaucet static at ₹45,110 — is running at 0.71× ROAS, the largest source of wasted spend in the account.</li>
+          <li>Remarketing_60Days frequency has hit 16.16× against an 11,507-person pool — audience fatigue is inflating CPM 60% above prospecting.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- IMMEDIATE ACTIONS -->
+  <section>
+    <h2>Immediate Actions</h2>
+    <div class="two-col">
+      <div class="col-box stop">
+        <h4>Stop the Bleeding</h4>
+        <ol class="insights">
+          <li>Pause BeamKitchenFaucet static — ₹45,110 spend, 0.71× ROAS.</li>
+          <li>Pause PurewashM050Bidet Video + Static combined — ₹26,513 spend, ~0.6× blended ROAS.</li>
+          <li>Pause Showering_ToobiShowerFaucet — ₹6,974 spend, 0 purchases on 40 ATCs.</li>
+          <li>Pause StriveSingleBowl Carousel — ₹7,156 spend, 0.52× ROAS; retire Carousel for this account.</li>
+          <li>Pause BoldDays EmilePullDown + AtomPullDown static units — ₹10,538 combined, sub-0.3× ROAS.</li>
+          <li>Pause Toilet OveOnePiece video — ₹5,409 spend, 0.49× ROAS.</li>
+        </ol>
+      </div>
+      <div class="col-box unlock">
+        <h4>Unlock Revenue</h4>
+        <ol class="insights">
+          <li>Scale StriveSingleBowl 38779 static — 9.61× ROAS on ₹20,685, clear headroom to increase budget.</li>
+          <li>Increase budget on KitchenSink&amp;Faucet CategoryPLP video — 15.93× ROAS on only ₹6,790, the most under-scaled hero in the account.</li>
+          <li>Scale StriveSingleBowl 38796 video — 3.05× ROAS, best video retention ratio (22.7%); reuse as a creative template.</li>
+          <li>Reset the Remarketing_60Days audience window to 14–30 days and refresh creative before adding spend back.</li>
+          <li>Redirect the ~₹1,01,700 in freed-up zombie budget into Kitchen Sinks &amp; Faucets, the only category clearing 3×+ ROAS.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer-note">Social Beat — Kohler India D2C · Meta Ads Weekly Creative Report · Generated Jul 13, 2026</div>
+</div>
+</body>
+</html>

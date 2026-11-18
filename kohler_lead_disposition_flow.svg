@@ -1,0 +1,140 @@
+<svg viewBox="0 0 2500 680" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Arial, Helvetica, sans-serif">
+  <title>Kohler Lead Disposition Flow</title>
+  <desc>Leads split into Connected and Not Connected. Connected splits into Lead Generated, Not Interested, and Others (Hangup, Language Barrier, Asking for Catalog, Required Later, Asking for callback). Not Connected splits into Not Answering, Not Reachable, and Invalid Number. Required Later, Asking for callback, Not Answering and Not Reachable all feed into a Call Back Pool.</desc>
+
+  <rect x="0" y="0" width="2500" height="680" fill="#FFFFFF"/>
+
+  <!-- ===== connectors ===== -->
+  <g stroke="#999999" stroke-width="2" fill="none">
+    <!-- Leads -> Connected / Not Connected -->
+    <line x1="1434" y1="97"  x2="1434" y2="130"/>
+    <line x1="717"  y1="130" x2="2150" y2="130"/>
+    <line x1="717"  y1="130" x2="717"  y2="163"/>
+    <line x1="2150" y1="130" x2="2150" y2="163"/>
+
+    <!-- Connected -> Lead Generated / Not Interested / Others -->
+    <line x1="717" y1="217" x2="717"  y2="250"/>
+    <line x1="250" y1="250" x2="1200" y2="250"/>
+    <line x1="250" y1="250" x2="250"  y2="283"/>
+    <line x1="700" y1="250" x2="700"  y2="283"/>
+    <line x1="1200" y1="250" x2="1200" y2="283"/>
+
+    <!-- Not Connected -> Not Answering / Not Reachable / Invalid Number -->
+    <line x1="2150" y1="217" x2="2150" y2="250"/>
+    <line x1="1950" y1="250" x2="2350" y2="250"/>
+    <line x1="1950" y1="250" x2="1950" y2="283"/>
+    <line x1="2150" y1="250" x2="2150" y2="283"/>
+    <line x1="2350" y1="250" x2="2350" y2="283"/>
+
+    <!-- Others -> Hangup / Language Barrier / Asking for Catalog / Required Later / Asking for callback -->
+    <line x1="1200" y1="337" x2="1200" y2="370"/>
+    <line x1="700"  y1="370" x2="1700" y2="370"/>
+    <line x1="700"  y1="370" x2="700"  y2="403"/>
+    <line x1="950"  y1="370" x2="950"  y2="403"/>
+    <line x1="1200" y1="370" x2="1200" y2="403"/>
+    <line x1="1450" y1="370" x2="1450" y2="403"/>
+    <line x1="1700" y1="370" x2="1700" y2="403"/>
+
+    <!-- Hangup / Asking for callback / Not Answering / Not Reachable -> Call Back Pool -->
+    <line x1="700"  y1="457" x2="700"  y2="510"/>
+    <line x1="1700" y1="457" x2="1700" y2="510"/>
+    <line x1="1950" y1="337" x2="1950" y2="510"/>
+    <line x1="2150" y1="337" x2="2150" y2="510"/>
+    <line x1="700"  y1="510" x2="2150" y2="510"/>
+    <line x1="1625" y1="510" x2="1625" y2="553"/>
+  </g>
+
+  <!-- ===== Leads ===== -->
+  <g>
+    <rect x="1359" y="43" width="150" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1434" y="76" text-anchor="middle" font-size="19" font-weight="700" fill="#1A1A2E">Leads</text>
+  </g>
+
+  <!-- ===== Connected ===== -->
+  <g>
+    <rect x="632" y="163" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#1E7D32" stroke-width="2"/>
+    <text x="717" y="196" text-anchor="middle" font-size="18" font-weight="700" fill="#1E7D32">Connected</text>
+  </g>
+
+  <!-- ===== Not Connected ===== -->
+  <g>
+    <rect x="2065" y="163" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#CC0000" stroke-width="2"/>
+    <text x="2150" y="190" text-anchor="middle" font-size="18" font-weight="700" fill="#CC0000">Not</text>
+    <text x="2150" y="207" text-anchor="middle" font-size="18" font-weight="700" fill="#CC0000">Connected</text>
+  </g>
+
+  <!-- ===== Lead Generated (positive) ===== -->
+  <g>
+    <rect x="165" y="283" width="170" height="54" rx="8" fill="#1E7D32" stroke="none"/>
+    <text x="250" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#FFFFFF">Lead Generated</text>
+  </g>
+
+  <!-- ===== Not Interested (negative) ===== -->
+  <g>
+    <rect x="615" y="283" width="170" height="54" rx="8" fill="#CC0000" stroke="none"/>
+    <text x="700" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#FFFFFF">Not Interested</text>
+  </g>
+
+  <!-- ===== Others ===== -->
+  <g>
+    <rect x="1115" y="283" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1200" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#1A1A2E">Others</text>
+  </g>
+
+  <!-- ===== Not Answering ===== -->
+  <g>
+    <rect x="1865" y="283" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1950" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#1A1A2E">Not Answering</text>
+  </g>
+
+  <!-- ===== Not Reachable ===== -->
+  <g>
+    <rect x="2065" y="283" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="2150" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#1A1A2E">Not Reachable</text>
+  </g>
+
+  <!-- ===== Invalid Number ===== -->
+  <g>
+    <rect x="2265" y="283" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="2350" y="316" text-anchor="middle" font-size="17" font-weight="700" fill="#1A1A2E">Invalid Number</text>
+  </g>
+
+  <!-- ===== Hangup ===== -->
+  <g>
+    <rect x="615" y="403" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="700" y="436" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Hangup</text>
+  </g>
+
+  <!-- ===== Language Barrier ===== -->
+  <g>
+    <rect x="865" y="403" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="950" y="436" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Language Barrier</text>
+  </g>
+
+  <!-- ===== Asking for Catalog ===== -->
+  <g>
+    <rect x="1115" y="403" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1200" y="426" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Asking for</text>
+    <text x="1200" y="443" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Catalog</text>
+  </g>
+
+  <!-- ===== Required Later ===== -->
+  <g>
+    <rect x="1365" y="403" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1450" y="436" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Required Later</text>
+  </g>
+
+  <!-- ===== Asking for callback ===== -->
+  <g>
+    <rect x="1615" y="403" width="170" height="54" rx="8" fill="#F2F2F2" stroke="#B0B0B0" stroke-width="2"/>
+    <text x="1700" y="426" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">Asking for</text>
+    <text x="1700" y="443" text-anchor="middle" font-size="16" font-weight="600" fill="#1A1A2E">callback</text>
+  </g>
+
+  <!-- ===== Call Back Pool ===== -->
+  <g>
+    <rect x="1530" y="553" width="190" height="54" rx="8" fill="#1A1A2E" stroke="none"/>
+    <text x="1625" y="586" text-anchor="middle" font-size="18" font-weight="700" fill="#FFFFFF">Call Back Pool</text>
+  </g>
+
+</svg>

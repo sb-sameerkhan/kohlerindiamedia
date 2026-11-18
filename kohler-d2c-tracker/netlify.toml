@@ -1,0 +1,10 @@
+[build]
+  # Only site/ is published — scripts and tokens in the project root never go live
+  publish   = "site"
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma = "no-cache"

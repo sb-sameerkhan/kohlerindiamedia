@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler Affiliate RO Generator</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #CC0000;
+    --navy: #1A1A2E;
+    --bg: #F4F5F8;
+    --white: #ffffff;
+    --border: #E5E7EB;
+    --text: #1A1A2E;
+    --muted: #6B7280;
+    --light: #9CA3AF;
+    --green-bg: #ECFDF5;
+    --green: #059669;
+    --amber-bg: #FFFBEB;
+    --amber: #D97706;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    --shadow: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 12px;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--navy);
+    padding: 16px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .header-brand { display: flex; align-items: center; gap: 12px; }
+  .brand-dot {
+    width: 8px; height: 8px;
+    background: var(--red);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .brand-name { color: #fff; font-size: 0.95em; font-weight: 600; line-height: 1.3; }
+  .brand-tagline { color: #9CA3AF; font-size: 0.72em; margin-top: 1px; }
+  .header-pill {
+    background: var(--red);
+    color: #fff;
+    font-size: 0.65em;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+
+  /* ── Page layout ── */
+  .page { max-width: 720px; margin: 0 auto; padding: 28px 16px 48px; }
+
+  /* ── Month selector ── */
+  .month-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .month-label {
+    font-size: 0.82em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .month-select {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--bg);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
+  }
+  .month-select:focus { border-color: var(--red); }
+  .month-range {
+    font-size: 0.8em;
+    color: var(--muted);
+    white-space: nowrap;
+    background: var(--bg);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── Info banner ── */
+  .banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #FFF8F8;
+    border: 1px solid #FEE2E2;
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    font-size: 0.84em;
+    color: #991B1B;
+    line-height: 1.6;
+  }
+  .banner-icon { font-size: 1.1em; flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Steps ── */
+  .steps {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+  .steps-title {
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .steps-list { display: flex; flex-direction: column; gap: 8px; }
+  .step-row { display: flex; align-items: flex-start; gap: 10px; }
+  .step-num {
+    width: 22px; height: 22px;
+    background: var(--red);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 0.7em;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-text { font-size: 0.85em; color: var(--muted); line-height: 1.5; }
+  .step-text strong { color: var(--text); }
+
+  /* ── Section label ── */
+  .section-label {
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--light);
+    margin-bottom: 10px;
+    padding-left: 2px;
+  }
+
+  /* ── Affiliate cards ── */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow 0.15s;
+    border-left: 4px solid var(--red);
+  }
+  .card:hover { box-shadow: var(--shadow); }
+  .card.skipped { border-left-color: var(--border); opacity: 0.5; }
+
+  .card-inner {
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .card-left { flex: 1; min-width: 200px; }
+  .card-name { font-weight: 700; font-size: 1em; color: var(--text); margin-bottom: 3px; }
+  .card-vendor { font-size: 0.78em; color: var(--muted); margin-bottom: 2px; }
+  .card-gst { font-size: 0.72em; color: var(--light); font-family: 'Courier New', monospace; }
+
+  .card-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .amount-block { text-align: right; }
+  .amount-value {
+    font-size: 1.25em;
+    font-weight: 800;
+    color: var(--red);
+    line-height: 1.2;
+    letter-spacing: -0.3px;
+  }
+  .amount-value.empty { color: var(--light); font-weight: 400; font-size: 0.9em; }
+  .amount-label { font-size: 0.68em; color: var(--light); margin-top: 2px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.68em;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    white-space: nowrap;
+    margin-top: 4px;
+  }
+  .badge.has-data { background: var(--green-bg); color: var(--green); }
+  .badge.no-data { background: var(--amber-bg); color: var(--amber); }
+
+  .open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s, transform 0.1s;
+    flex-shrink: 0;
+  }
+  .open-btn:hover { background: #aa0000; }
+  .open-btn:active { transform: scale(0.98); }
+  .open-btn.disabled {
+    background: var(--border);
+    color: var(--light);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .btn-arrow { font-size: 0.9em; }
+
+  .skipped-text { color: var(--light); font-size: 0.82em; font-style: italic; }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    color: var(--light);
+    font-size: 0.75em;
+    margin-top: 32px;
+    line-height: 1.8;
+  }
+  .footer a { color: var(--red); text-decoration: none; }
+
+  /* ── Mobile ── */
+  @media (max-width: 560px) {
+    .header { padding: 14px 16px; }
+    .brand-name { font-size: 0.88em; }
+    .page { padding: 20px 12px 40px; }
+    .month-card { padding: 16px; gap: 12px; }
+    .month-select { min-width: 0; }
+    .month-range { display: none; }
+    .card-inner { padding: 16px; gap: 12px; }
+    .card-right { width: 100%; justify-content: space-between; }
+    .open-btn { flex: 1; justify-content: center; }
+    .amount-block { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="brand-dot"></div>
+    <div>
+      <div class="brand-name">Kohler Affiliate RO Generator</div>
+      <div class="brand-tagline">Social Beat · Amounts from tracker sheets</div>
+    </div>
+  </div>
+  <div class="header-pill">KOHLER</div>
+</header>
+
+<div class="page">
+
+  <div class="month-card">
+    <div class="month-label">Billing Month</div>
+    <select class="month-select" id="monthSelect" onchange="updateAll()"></select>
+    <div class="month-range" id="monthInfo"></div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-icon">📎</div>
+    <div>Each form has a mandatory <strong>Customer PO</strong> field — upload any blank screenshot when the form opens. The RO PDF will be sent to your inbox after submission.</div>
+  </div>
+
+  <div class="steps">
+    <div class="steps-title">How to submit</div>
+    <div class="steps-list">
+      <div class="step-row"><div class="step-num">1</div><div class="step-text">Select billing month — amounts auto-fill from Windsor tracker</div></div>
+      <div class="step-row"><div class="step-num">2</div><div class="step-text">Click <strong>Open Form</strong> — all fields are pre-filled in the Google Form</div></div>
+      <div class="step-row"><div class="step-num">3</div><div class="step-text">Upload any image for <strong>Customer PO*</strong>, edit if needed, then click <strong>Submit</strong></div></div>
+      <div class="step-row"><div class="step-num">4</div><div class="step-text">RO PDF arrives in your inbox. Repeat for next affiliate.</div></div>
+    </div>
+  </div>
+
+  <div class="section-label">Affiliates</div>
+
+  <!-- Analytic Cloud -->
+  <div class="card" id="card-ac">
+    <div class="card-inner">
+      <div class="card-left">
+        <div class="card-name">Analytic Cloud</div>
+        <div class="card-vendor">Analytics Clouds Private Limited</div>
+        <div class="card-gst">09AAYCA2755M1ZT · UDYAM-UP-74-0020295</div>
+      </div>
+      <div class="card-right">
+        <div class="amount-block">
+          <div class="amount-value" id="amt-ac">—</div>
+          <div class="amount-label">excl. tax</div>
+          <span class="badge" id="badge-ac"></span>
+        </div>
+        <a class="open-btn disabled" id="btn-ac" href="#" target="_blank" rel="noopener">
+          Open Form <span class="btn-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clickonik -->
+  <div class="card" id="card-ck">
+    <div class="card-inner">
+      <div class="card-left">
+        <div class="card-name">Clickonik</div>
+        <div class="card-vendor">CLICKONIK DIGITAL MEDIA PRIVATE LIMITED</div>
+        <div class="card-gst">06AAGCC6692M1Z3 · UDYAM-HR-05-0020557</div>
+      </div>
+      <div class="card-right">
+        <div class="amount-block">
+          <div class="amount-value" id="amt-ck">—</div>
+          <div class="amount-label">excl. tax</div>
+          <span class="badge" id="badge-ck"></span>
+        </div>
+        <a class="open-btn disabled" id="btn-ck" href="#" target="_blank" rel="noopener">
+          Open Form <span class="btn-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- StrongMetrics -->
+  <div class="card" id="card-sm">
+    <div class="card-inner">
+      <div class="card-left">
+        <div class="card-name">StrongMetrics</div>
+        <div class="card-vendor">Rushfoil Ventures (OPC) Pvt Ltd</div>
+        <div class="card-gst">06AALCR2133F1ZM · UDYAM-HR-03-0077598</div>
+      </div>
+      <div class="card-right">
+        <div class="amount-block">
+          <div class="amount-value" id="amt-sm">—</div>
+          <div class="amount-label">excl. tax</div>
+          <span class="badge" id="badge-sm"></span>
+        </div>
+        <a class="open-btn disabled" id="btn-sm" href="#" target="_blank" rel="noopener">
+          Open Form <span class="btn-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ventes -->
+  <div class="card" id="card-vt">
+    <div class="card-inner">
+      <div class="card-left">
+        <div class="card-name">Ventes</div>
+        <div class="card-vendor">Ventes Avenues Private Limited</div>
+        <div class="card-gst">27AAFCV0664D2ZF</div>
+      </div>
+      <div class="card-right">
+        <div class="amount-block">
+          <div class="amount-value" id="amt-vt">—</div>
+          <div class="amount-label">excl. tax</div>
+          <span class="badge" id="badge-vt"></span>
+        </div>
+        <a class="open-btn disabled" id="btn-vt" href="#" target="_blank" rel="noopener">
+          Open Form <span class="btn-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nomadzdigital -->
+  <div class="card" id="card-nd">
+    <div class="card-inner">
+      <div class="card-left">
+        <div class="card-name">Nomadzdigital</div>
+        <div class="card-vendor">NOMADZ DIGITAL AND INNOVATION PRIVATE LIMITED</div>
+        <div class="card-gst">06AAICN7496G1ZZ · UDYAM-HR-05-0157476</div>
+      </div>
+      <div class="card-right">
+        <div class="amount-block">
+          <div class="amount-value" id="amt-nd">—</div>
+          <div class="amount-label">excl. tax</div>
+          <span class="badge" id="badge-nd"></span>
+        </div>
+        <a class="open-btn disabled" id="btn-nd" href="#" target="_blank" rel="noopener">
+          Open Form <span class="btn-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Kohler Affiliate RO Generator &nbsp;·&nbsp; <a href="https://socialbeat.in" target="_blank">Social Beat</a>
+    &nbsp;·&nbsp; <a href="mailto:sameer.khan@socialbeat.in">sameer.khan@socialbeat.in</a>
+  </div>
+
+</div>
+
+<script>
+const PAYOUTS = {
+  ac: { "2026-1":62993, "2026-2":121099, "2026-3":170993, "2026-4":76569, "2026-5":48250, "2026-6":659923, "2026-7":882771, "2026-8":225915, "2026-9":78357 },
+  ck: { "2026-1":47180, "2026-2":429603, "2026-3":224054, "2026-4":164219, "2026-5":195141, "2026-6":155995, "2026-7":33720, "2026-8":14534, "2026-9":201616 },
+  sm: { "2026-3":909956, "2026-4":83842, "2026-5":285515, "2026-6":173129, "2026-7":747771, "2026-8":698292, "2026-9":378756 },
+  vt: { "2026-5":202993, "2026-6":199214, "2026-7":268026, "2026-8":183538, "2026-9":700219 },
+  nd: { "2026-6":287423, "2026-7":319637, "2026-8":112595, "2026-9":8924 },
+};
+
+const START = {
+  ac: { year:2026, month:1 },
+  ck: { year:2026, month:1 },
+  sm: { year:2026, month:3 },
+  vt: { year:2026, month:5 },
+  nd: { year:2026, month:6 },
+};
+
+const AFFILIATES = {
+  ac: { vendorName:'Analytics Clouds Private Limited', addr1:'0, 917, Idgah Road,', addr2:'Gandhi Nagar,', city:'Unnao', pin:'209801', state:'Uttar Pradesh', gst:'09AAYCA2755M1ZT', msme:'UDYAM-UP-74-0020295' },
+  ck: { vendorName:'CLICKONIK DIGITAL MEDIA PRIVATE LIMITED', addr1:'2ND FLOOR, UNIT NO-260, TOWER B1, SPAZE I TECH PARK', addr2:'SECTOR 49, SOHNA ROAD,', city:'Gurugram', pin:'122018', state:'Haryana', gst:'06AAGCC6692M1Z3', msme:'UDYAM-HR-05-0020557' },
+  sm: { vendorName:'Rushfoil Ventures (OPC) Pvt Ltd', addr1:'C-502, IBIZA Town,', addr2:'Surajkund Road,', city:'Faridabad', pin:'121009', state:'Haryana', gst:'06AALCR2133F1ZM', msme:'UDYAM-HR-03-0077598' },
+  vt: { vendorName:'Ventes Avenues Private Limited', addr1:'B1-504, Marathon Innova,', addr2:'Ganpatrao Kadam Marg, Lower Parel', city:'Mumbai', pin:'400013', state:'Maharastra', gst:'27AAFCV0664D2ZF', msme:'' },
+  nd: { vendorName:'NOMADZ DIGITAL AND INNOVATION PRIVATE LIMITED', addr1:'5th FLOOR, UNIT NO-523,Tower B4', addr2:'SECTOR 49, SOHNA ROAD,SPAZE I TECH PARK', city:'Gurugram', pin:'122018', state:'Haryana', gst:'06AAICN7496G1ZZ', msme:'UDYAM-HR-05-0157476' },
+};
+
+const FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSdq8LoLtV6E5Y1zaaHYxNahrhtsUV5uc3eyw9rrIC5ZLQ9YFQ/viewform';
+const E = { title:'1666370238', vendor:'416300889', addr1:'1539270527', addr2:'1809822220', city:'1780566876', pin:'402615519', state:'1298732700', gst:'1962003191', msme:'1021529568', dateFrom:'147966924', dateTo:'2121708362', client:'1373111212', campaign:'1431466966', amount:'2066359955', tax:'142390271', payment:'627503231' };
+
+const MN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function lastDay(y, m) { return new Date(y, m, 0).getDate(); }
+
+// For current month: end date is yesterday. For past months: last day of month.
+function endDay(y, m) {
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  if (y === cy && m === cm) {
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    return yesterday.getDate();
+  }
+  return lastDay(y, m);
+}
+
+function buildUrl(key, y, m, amount) {
+  const af = AFFILIATES[key];
+  const ed = endDay(y, m);
+  const p = new URLSearchParams();
+  p.set(`entry.${E.title}`, 'RO');
+  p.set(`entry.${E.vendor}`, af.vendorName);
+  p.set(`entry.${E.addr1}`, af.addr1);
+  p.set(`entry.${E.addr2}`, af.addr2);
+  p.set(`entry.${E.city}`, af.city);
+  p.set(`entry.${E.pin}`, af.pin);
+  p.set(`entry.${E.state}`, af.state);
+  p.set(`entry.${E.gst}`, af.gst);
+  p.set(`entry.${E.msme}`, af.msme);
+  p.set(`entry.${E.dateFrom}_year`, String(y));
+  p.set(`entry.${E.dateFrom}_month`, String(m));
+  p.set(`entry.${E.dateFrom}_day`, '1');
+  p.set(`entry.${E.dateTo}_year`, String(y));
+  p.set(`entry.${E.dateTo}_month`, String(m));
+  p.set(`entry.${E.dateTo}_day`, String(ed));
+  p.set(`entry.${E.client}`, 'Kohler India');
+  p.set(`entry.${E.campaign}`, `Kohler CPS Campaign - ${MN[m-1]} ${y}`);
+  p.set(`entry.${E.amount}`, String(amount));
+  p.set(`entry.${E.tax}`, 'Exclusive of Tax');
+  p.set(`entry.${E.payment}`, '100% at Invoice Date + 60 Days');
+  return `${FORM}?usp=pp_url&${p.toString()}`;
+}
+
+function latestDataMonth() {
+  // Find the most recent COMPLETE month with payout data (excludes current month)
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  let bestY = 0, bestM = 0;
+  Object.values(PAYOUTS).forEach(monthMap => {
+    Object.keys(monthMap).forEach(k => {
+      const [y, m] = k.split('-').map(Number);
+      if (y === cy && m === cm) return; // skip current month (partial)
+      if (y > bestY || (y === bestY && m > bestM)) { bestY = y; bestM = m; }
+    });
+  });
+  if (bestY === 0) return { year: cy, month: cm }; // fallback
+  return { year: bestY, month: bestM };
+}
+
+function buildMonthOptions() {
+  const sel = document.getElementById('monthSelect');
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  const def = latestDataMonth(); // default = latest month with any data
+
+  for (let y = 2026; y <= cy; y++) {
+    const me = (y === cy) ? cm : 12;
+    for (let m = 1; m <= me; m++) {
+      const o = document.createElement('option');
+      o.value = `${y}-${m}`;
+      o.textContent = `${MN[m-1]} ${y}`;
+      if (y === def.year && m === def.month) o.selected = true;
+      sel.appendChild(o);
+    }
+  }
+}
+
+function updateAll() {
+  const [y, m] = document.getElementById('monthSelect').value.split('-').map(Number);
+  document.getElementById('monthInfo').textContent = `1 – ${endDay(y, m)} ${MN[m-1]}`;
+
+  Object.keys(AFFILIATES).forEach(key => {
+    const amtEl = document.getElementById(`amt-${key}`);
+    const btn   = document.getElementById(`btn-${key}`);
+    const badge = document.getElementById(`badge-${key}`);
+    const mk    = `${y}-${m}`;
+    const s     = START[key];
+    const after = (y > s.year) || (y === s.year && m >= s.month);
+    const payout = PAYOUTS[key][mk];
+
+    if (payout !== undefined) {
+      amtEl.textContent = '₹' + payout.toLocaleString('en-IN');
+      amtEl.className = 'amount-value';
+      badge.textContent = 'From tracker ✓';
+      badge.className = 'badge has-data';
+      btn.href = buildUrl(key, y, m, payout);
+      btn.classList.remove('disabled');
+    } else if (!after) {
+      amtEl.textContent = '—';
+      amtEl.className = 'amount-value empty';
+      badge.textContent = `Starts ${MS[s.month-1]} ${s.year}`;
+      badge.className = 'badge no-data';
+      btn.href = '#';
+      btn.classList.add('disabled');
+    } else {
+      amtEl.textContent = '—';
+      amtEl.className = 'amount-value empty';
+      badge.textContent = 'No data yet';
+      badge.className = 'badge no-data';
+      btn.href = '#';
+      btn.classList.add('disabled');
+    }
+  });
+}
+
+buildMonthOptions();
+updateAll();
+</script>
+
+</body>
+</html>

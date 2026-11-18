@@ -1,0 +1,1928 @@
+<!DOCTYPE html>
+<!--
+  Kohler D2C Performance Tracker — Standalone / External Deployment Version
+  =========================================================================
+  This file is self-contained and runs outside Claude.
+  Data is fetched directly from Windsor.ai's REST API.
+
+  SETUP (one-time):
+  1. Get your Windsor.ai API key: https://app.windsor.ai → Settings → API
+  2. Paste it into CONFIG.WINDSOR_API_KEY below.
+  3. Open this file in any browser — no server required for basic use.
+
+  CORS NOTE:
+  Windsor.ai sends CORS headers, so direct browser fetches usually work.
+  If you hit CORS errors (common when opening as file:// on some browsers),
+  serve the file via a local server:
+    npx serve .   OR   python -m http.server 8080
+  Then open http://localhost:8080/Kohler_D2C_Tracker_Standalone.html
+
+  SHARING WITH THE TEAM:
+  Host on any static host (Netlify, GitHub Pages, S3, internal server).
+  The API key is embedded in the file — use a backend proxy if you need
+  to keep it private.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kohler D2C Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light; }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f1f5;color:#1A1A2E;font-size:12px;}
+.hdr{background:#1A1A2E;color:#fff;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:50;}
+.hdr-l{display:flex;align-items:center;gap:10px;}.redbar{width:4px;height:26px;background:#CC0000;border-radius:2px;flex-shrink:0;}
+.hdr-sub{font-size:10px;color:#8a93b2;margin-top:1px;}
+.hdr-r{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.range-pills{display:flex;gap:4px;}
+.rpill{background:#2a2d45;color:#aab;border:1px solid #3a3f60;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;transition:.15s;}
+.rpill.active,.rpill:hover{background:#CC0000;color:#fff;border-color:#CC0000;}
+.custom-dates{display:flex;align-items:center;gap:4px;}
+.custom-dates input{background:#2a2d45;border:1px solid #3a3f60;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;}
+.custom-dates input::-webkit-calendar-picker-indicator{filter:invert(1);}
+.btn{background:#CC0000;color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.btn:hover{background:#aa0000;}
+.btn:disabled{background:#666;cursor:not-allowed;}
+.loading{position:fixed;inset:0;background:rgba(240,241,245,.88);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:10px;}
+.spinner{width:28px;height:28px;border:3px solid #ddd;border-top-color:#CC0000;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#555;font-size:12px;}
+.hidden{display:none!important;}
+.tabs-bar{background:#fff;border-bottom:1px solid #e0e0e0;display:flex;padding:0 18px;}
+.tbbtn{padding:9px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;white-space:nowrap;}
+.tbbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;}
+.sale-tab-btn{color:#CC0000;}
+.sale-pill{font-weight:800!important;}
+.sale-pill.mega{color:#CC0000!important;border-color:#CC0000!important;}
+.sale-pill.mini{color:#E07B00!important;border-color:#E07B00!important;}
+.sale-pill.mega.active{background:#fff0f0!important;color:#CC0000!important;}
+.sale-pill.mini.active{background:#fff8ee!important;color:#E07B00!important;}
+.sale-notice{background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:12px 16px;font-size:11px;color:#7a5c00;margin-bottom:14px;}
+.sale-events-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:900px){.sale-events-grid{grid-template-columns:1fr;}}
+.sale-card{background:#fff;border-radius:8px;border:1px solid #e8e8e8;overflow:hidden;}
+.sale-card-hdr{display:flex;align-items:center;gap:12px;padding:12px 16px;}
+.mega-hdr{background:linear-gradient(90deg,#fff5f5,#fff);}
+.mini-hdr{background:linear-gradient(90deg,#fffaf0,#fff);}
+.sale-emoji{font-size:28px;line-height:1;}
+.sale-title{font-size:15px;font-weight:900;color:#1A1A2E;}
+.sale-dates{font-size:10px;color:#888;margin-top:2px;}
+.sale-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#f0f0f0;border-top:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;}
+.sale-kpi{background:#fff;padding:10px 12px;text-align:center;}
+.sale-kpi .kl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;}
+.sale-kpi .kv{font-size:15px;font-weight:800;color:#1A1A2E;margin-top:2px;}
+.sale-table-wrap{overflow-x:auto;padding:0 0 2px;}
+.sale-table{width:100%;border-collapse:collapse;font-size:11px;}
+.sale-table th{background:#f8f8f8;padding:7px 10px;text-align:right;font-size:9px;color:#888;font-weight:700;white-space:nowrap;border-bottom:1px solid #eee;}
+.sale-table th:first-child{text-align:left;}
+.sale-table td{padding:7px 10px;text-align:right;border-bottom:1px solid #f5f5f5;white-space:nowrap;}
+.sale-table td:first-child{text-align:left;font-weight:700;}
+.sale-table tr.total-row td{background:#f8f8f8;font-weight:800;border-top:2px solid #e8e8e8;}
+.sale-table tr.avg-row td{background:#fffdf5;font-size:10px;color:#888;font-style:italic;}
+.sale-month-bar{display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.sale-month-lbl{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-right:4px;}
+.smpill{padding:4px 12px;border-radius:20px;border:1.5px solid #ddd;background:#fff;color:#666;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;}
+.smpill.active{background:#1A1A2E;color:#fff;border-color:#1A1A2E;}
+.smpill:hover:not(.active){border-color:#999;color:#333;}
+.sale-nosale{padding:28px 16px;text-align:center;color:#bbb;font-size:12px;font-style:italic;}
+.sale-dod-hdr{padding:8px 14px 4px;font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.6px;border-top:1px solid #f0f0f0;background:#fafafa;}
+.sale-dod-table th,.sale-dod-table td{padding:6px 9px;font-size:10px;}
+.sale-dod-table tr:last-child td{border-bottom:none;}
+.tab{display:none;padding:14px 18px 20px;}
+.tab.active{display:block;}
+.sstrip{display:grid;gap:8px;margin-bottom:12px;}
+.scard{background:#fff;border-radius:6px;padding:10px 12px;border-top:3px solid #e0e0e0;}
+.scard.all{border-top-color:#1A1A2E;}
+.scard .lbl{font-size:9px;color:#999;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.scard .val{font-size:18px;font-weight:800;color:#1A1A2E;line-height:1;}
+.scard .sub{font-size:9px;color:#aaa;margin-top:3px;}
+.scard .sub b{color:#666;}
+.ppanels{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;margin-top:12px;}
+.ppanel-hdr.bing-h{background:#0078D4;color:#fff;}
+.ppanel-hdr.aff-h{background:#7B5EA7;color:#fff;}
+.ppanel{background:#fff;border-radius:6px;overflow:hidden;}
+.ppanel-hdr{padding:8px 14px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;letter-spacing:.3px;}
+.ppanel-hdr.meta-h{background:#1877F2;color:#fff;}
+.ppanel-hdr.goog-h{background:#34A853;color:#fff;}
+.ppanel-body{padding:12px 14px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;}
+.kpi-box{background:#f8f9fc;border-radius:5px;padding:8px 6px;text-align:center;}
+.kpi-box.kpi-primary{background:#f0f2f8;border-bottom:2px solid #1A1A2E;}
+.kl{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;}
+.kv{font-size:18px;font-weight:800;color:#1A1A2E;line-height:1.1;}
+.kv-sm{font-size:14px;}
+.funnel{display:flex;align-items:center;gap:6px;padding:8px 0;border-top:1px solid #f0f0f0;}
+.fstep{flex:1;text-align:center;}
+.fstep .fn{font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:.4px;}
+.fstep .fv{font-size:13px;font-weight:700;color:#1A1A2E;margin-top:2px;}
+.farr{color:#ddd;font-size:14px;flex-shrink:0;}
+.chart-card{background:#fff;border-radius:6px;padding:12px 14px;}
+.chart-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px;}
+.chart-hdr h3{font-size:11px;font-weight:700;}
+.cleg{display:flex;gap:12px;}
+.cleg-i{display:flex;align-items:center;gap:4px;font-size:10px;color:#666;}
+.cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.plt-tog{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;border:1.5px solid var(--c);background:transparent;color:#666;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;opacity:.45;}
+.plt-tog.active{background:color-mix(in srgb,var(--c) 12%,transparent);color:#1A1A2E;opacity:1;}
+.plt-tog:hover{opacity:.85;}
+canvas{max-height:150px;}
+.table-card{background:#fff;border-radius:6px;overflow:hidden;}
+.ttabs{display:flex;border-bottom:1px solid #eee;background:#fafafa;flex-wrap:nowrap;overflow-x:auto;}
+.ttbtn{padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;}
+.ttbtn.active{color:#1A1A2E;border-bottom-color:#CC0000;background:#fff;}
+.tcontent{display:none;}
+.tcontent.active{display:block;}
+.twrap{overflow-x:auto;max-height:380px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:11px;}
+th{position:sticky;top:0;background:#f5f6fa;font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.4px;padding:7px 9px;text-align:right;font-weight:700;border-bottom:1px solid #eaeaea;white-space:nowrap;z-index:2;}
+th:first-child{text-align:left;min-width:120px;position:sticky;top:0;left:0;z-index:4;background:#f5f6fa;}
+td{padding:5px 9px;text-align:right;border-bottom:1px solid #f5f5f5;color:#444;white-space:nowrap;}
+td:first-child{position:sticky;left:0;z-index:1;background:#fff;text-align:left;color:#1A1A2E;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;}
+tr:hover td{background:#fafafa;}
+tr:hover td:first-child{background:#fafafa;}
+.red{color:#CC0000;font-weight:700;}
+.grn{color:#34A853;font-weight:700;}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;margin-right:3px;vertical-align:middle;}
+.b-pmax{background:#f3e8ff;color:#7c3aed;}
+.b-shop{background:#fff0f0;color:#CC0000;}
+.b-srch{background:#e8f4fd;color:#0284c7;}
+.b-dgen{background:#fce7f3;color:#db2777;}
+.b-pros{background:#e8f4fd;color:#1877F2;}
+.b-look{background:#f0faf0;color:#34A853;}
+.b-rema{background:#fff8e1;color:#e08a00;}
+.b-oth{background:#f0f0f0;color:#666;}
+.wsub{display:flex;border-bottom:1px solid #eee;padding:0 14px;background:#fafafa;}
+.wsb{padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:#999;border-bottom:2px solid transparent;transition:.15s;}
+.wsb.active{color:#1A1A2E;border-bottom-color:#1877F2;background:#fff;}
+.wcontent{display:none;padding:0;}
+.wcontent.active{display:block;}
+.stitle{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.empty{padding:24px;text-align:center;color:#aaa;font-size:12px;}
+.api-warning{background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#856404;}
+.api-warning b{color:#533f03;}
+/* ── Mobile Responsive ── */
+@media(max-width:640px){
+  .hdr{flex-direction:column;align-items:flex-start;padding:10px 12px;gap:8px;position:relative;}
+  .hdr-r{width:100%;flex-direction:column;align-items:flex-start;gap:6px;}
+  .range-pills{flex-wrap:wrap;gap:3px;}
+  .rpill{padding:3px 8px;font-size:10px;}
+  .custom-dates{flex-wrap:wrap;}
+  .custom-dates input{font-size:10px;padding:3px 6px;flex:1;min-width:100px;}
+  .btn{width:100%;text-align:center;padding:7px;}
+  .tabs-bar{padding:0 8px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tabs-bar::-webkit-scrollbar{display:none;}
+  .tbbtn{padding:9px 10px;font-size:10px;}
+  .tab{padding:10px 10px 16px;}
+  .sstrip{grid-template-columns:repeat(2,1fr)!important;}
+  .scard .val{font-size:15px;}
+  .ppanels{grid-template-columns:1fr;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
+  .kv{font-size:15px;}
+  .kv-sm{font-size:13px;}
+  .funnel{flex-wrap:wrap;gap:4px;}
+  .fstep{min-width:60px;}
+  .farr{display:none;}
+  .cleg{flex-wrap:wrap;gap:5px;}
+  canvas{max-height:200px;}
+  .chart-card{padding:10px 10px;}
+  .twrap{max-height:320px;}
+  .sale-events-grid{grid-template-columns:1fr;}
+  .sale-kpis{grid-template-columns:repeat(3,1fr);}
+  .sale-kpi .kv{font-size:13px;}
+  .sale-month-bar{gap:4px;}
+  .insights-grid{grid-template-columns:1fr;}
+  .stitle{font-size:10px;}
+  .wsub,.ttabs{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .wsb,.ttbtn{white-space:nowrap;}
+}
+@media(max-width:400px){
+  .sstrip{grid-template-columns:1fr 1fr!important;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)!important;}
+  .sale-kpis{grid-template-columns:repeat(2,1fr);}
+}
+/* ── Insights ── */
+.insights-block{margin-top:10px;}
+.insights-hdr{font-size:9px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.insights-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;}
+.ins{border-radius:6px;padding:10px 12px;border-left:3px solid #ccc;background:#fff;position:relative;}
+.ins.signal{border-left-color:#34A853;background:#f6fdf7;}
+.ins.watch{border-left-color:#E07B00;background:#fffaf2;}
+.ins.action{border-left-color:#CC0000;background:#fff5f5;}
+.ins.opp{border-left-color:#1877F2;background:#f4f8ff;}
+.ins-tag{display:inline-block;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:1px 5px;border-radius:2px;margin-bottom:5px;}
+.signal .ins-tag{background:#d4f0db;color:#1a7a3a;}
+.watch .ins-tag{background:#fde8c8;color:#964d00;}
+.action .ins-tag{background:#ffd4d4;color:#990000;}
+
+.insights-block{margin:0;}
+.insights-hdr{font-size:10px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+.insights-grid{display:flex;flex-wrap:wrap;gap:8px;}
+.ins{background:#fff;border-radius:6px;padding:10px 12px;flex:1 1 280px;border-left:3px solid #ddd;font-size:11px;line-height:1.5;}
+.ins.signal{border-left-color:#2ecc71;}
+.ins.watch{border-left-color:#f39c12;}
+.ins.action{border-left-color:#e74c3c;}
+.ins.opp{border-left-color:#3498db;}
+.ins-title{font-weight:800;color:#1A1A2E;margin:3px 0 4px;font-size:12px;}
+.ins-body{color:#444;margin-bottom:5px;}
+.ins-action{color:#666;font-size:10px;font-style:italic;}
+
+.opp .ins-tag{background:#d4e8ff;color:#0055cc;}
+.ins-title{font-size:11px;font-weight:700;color:#1A1A2E;margin-bottom:3px;line-height:1.3;}
+.ins-body{font-size:10px;color:#555;line-height:1.5;}
+.ins-body b{color:#1A1A2E;}
+.ins-action{margin-top:5px;font-size:10px;font-weight:700;color:#333;padding-top:5px;border-top:1px solid rgba(0,0,0,.06);}
+.ins-empty{font-size:11px;color:#bbb;font-style:italic;padding:8px 0;}
+</style>
+</head>
+<body>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     CONFIGURATION — edit this section before deploying
+     ═══════════════════════════════════════════════════════ -->
+<script>
+const CONFIG = {
+  // Windsor.ai REST API key
+  // Get it from: https://app.windsor.ai → Settings → API Keys
+  WINDSOR_API_KEY: 'REPLACE_WITH_WINDSOR_API_KEY',
+
+  // Windsor.ai API base URL
+  WINDSOR_API_BASE: 'https://connectors.windsor.ai',
+
+  // Meta Ads account
+  META_ACCOUNT: '1542147597124356',
+
+  // Google Ads account (format: no dashes internally for Windsor)
+  GOOGLE_ADS_ACCOUNT: '9242907329',
+  BING_ACCOUNT: '187198169',  // Kohler - SB
+
+  // Google Sheet tab IDs keyed by YYYY-MM — only months in the selected range are fetched
+  SHEET_ACCOUNTS_BY_MONTH: {
+    '2026-01': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-0',
+    '2026-02': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-1557025122',
+    '2026-03': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-959477246',
+    '2026-04': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-810876823',
+    '2026-05': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-1538906022',
+    '2026-06': '1T3LsL6HoG3Mp1zCvFH_qCe3Nk1QlP28Z0ANTOOOsT1I-122370696',
+  },
+  // Flat list kept for backward compat (Sale Events tab cache)
+  get SHEET_ACCOUNTS() { return Object.values(this.SHEET_ACCOUNTS_BY_MONTH); },
+
+  // Manual Google Ads conversion overrides (tracking misconfiguration)
+  // Key: YYYY-MM-DD, Value: actual conversion count
+  CONV_OVERRIDES: {
+    '2026-06-05': 16,
+    '2026-06-06': 41,
+  },
+};
+</script>
+
+<div class="loading hidden" id="loader">
+  <div class="spinner"></div>
+  <p id="loaderMsg">Fetching Kohler D2C data…</p>
+</div>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <svg width="90" height="28" viewBox="0 0 90 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+      <rect width="90" height="28" rx="2" fill="#000"/>
+      <text x="45" y="20" text-anchor="middle" font-family="'Arial Black','Arial',sans-serif" font-weight="900" font-size="15" letter-spacing="3" fill="#fff">KOHLER</text>
+    </svg>
+    <div class="redbar" style="margin-left:4px;"></div>
+    <div>
+      <div style="font-size:14px;font-weight:700;color:#fff;">D2C Tracker</div>
+      <div class="hdr-sub">Meta D2C · Google Ads (excl. Branding) · Bing · Affiliate</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div class="range-pills">
+      <button class="rpill" onclick="setRange('today')">Today</button>
+      <button class="rpill active" onclick="setRange('yesterday')">Yesterday</button>
+      <button class="rpill" onclick="setRange('7d')">7D</button>
+      <button class="rpill" onclick="setRange('14d')">14D</button>
+      <button class="rpill" onclick="setRange('30d')">30D</button>
+      <button class="rpill" onclick="setRange('this-month')">This Month</button>
+      <button class="rpill" onclick="setRange('last-month')">Last Month</button>
+    </div>
+    <div class="custom-dates">
+      <input type="date" id="d1"> <span style="color:#aaa;font-size:10px;">–</span> <input type="date" id="d2">
+    </div>
+    <button class="btn" id="refreshBtn" onclick="load()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="tabs-bar">
+  <button class="tbbtn active" onclick="switchTab('overview')">Overview</button>
+  <button class="tbbtn" onclick="switchTab('daily')">Day on Day</button>
+  <button class="tbbtn" onclick="switchTab('weekly')">Week on Week</button>
+  <button class="tbbtn" onclick="switchTab('campaigns')">Campaign Wise</button>
+  <button class="tbbtn sale-tab-btn" onclick="switchTab('sales')">🛍 Sale Events</button>
+</div>
+
+<!-- OVERVIEW TAB -->
+<div class="tab active" id="tab-overview">
+  <div id="apiKeyWarning" class="api-warning hidden">
+    ⚠️ <b>API key not set.</b> Open this file, find <code>CONFIG.WINDSOR_API_KEY</code> and paste your Windsor.ai API key.
+    Get it from <a href="https://app.windsor.ai" target="_blank">app.windsor.ai</a> → Settings → API Keys.
+  </div>
+  <div class="sstrip" style="grid-template-columns:repeat(7,1fr);" id="summaryStrip">
+    <div class="scard all"><div class="lbl">Total Spend</div><div class="val" id="s_spend">—</div><div class="sub" id="s_spend_s">—</div></div>
+    <div class="scard all"><div class="lbl">Purchases</div><div class="val" id="s_purch">—</div><div class="sub" id="s_purch_s">—</div></div>
+    <div class="scard all"><div class="lbl">Revenue</div><div class="val" id="s_rev">—</div><div class="sub" id="s_rev_s">—</div></div>
+    <div class="scard all"><div class="lbl">ROAS</div><div class="val" id="s_roas">—</div><div class="sub" id="s_roas_s">—</div></div>
+    <div class="scard all"><div class="lbl">Conv. Rate</div><div class="val" id="s_cvr">—</div><div class="sub">Purchases / Clicks</div></div>
+    <div class="scard all"><div class="lbl">AOV</div><div class="val" id="s_aov">—</div><div class="sub">Revenue / Purchase</div></div>
+    <div class="scard all"><div class="lbl">CAC</div><div class="val" id="s_cac">—</div><div class="sub" id="s_cac_s">Spend / Purchase</div></div>
+  </div>
+  <div id="insights-overview" style="margin:10px 0 4px;"></div>
+  <div class="ppanels">
+    <div class="ppanel">
+      <div class="ppanel-hdr meta-h"><span style="font-size:13px;font-weight:900;">f</span> Meta Ads — D2C Only</div>
+      <div class="ppanel-body">
+        <div class="kpi-grid">
+          <div class="kpi-box kpi-primary"><div class="kl">Spend</div><div class="kv" id="m_spend">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Purchases</div><div class="kv" id="m_purch">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Revenue</div><div class="kv" id="m_rev">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">ROAS</div><div class="kv" id="m_roas">—</div></div>
+          <div class="kpi-box"><div class="kl">Conv. Rate</div><div class="kv kv-sm" id="m_cvr">—</div></div>
+          <div class="kpi-box"><div class="kl">AOV</div><div class="kv kv-sm" id="m_aov">—</div></div>
+          <div class="kpi-box"><div class="kl">CTR</div><div class="kv kv-sm" id="m_ctr">—</div></div>
+          <div class="kpi-box"><div class="kl">CPC</div><div class="kv kv-sm" id="m_cpc">—</div></div>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><div class="fn">Add to Cart</div><div class="fv" id="m_atc">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Checkout</div><div class="fv" id="m_chk">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Purchases</div><div class="fv" id="m_purch2">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CPA</div><div class="fv" id="m_cpa">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Campaigns</div><div class="fv" id="m_camps">—</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ppanel">
+      <div class="ppanel-hdr goog-h"><span style="font-size:13px;font-weight:900;">G</span> Google Ads — D2C (excl. Branding + DemandGen)</div>
+      <div class="ppanel-body">
+        <div class="kpi-grid">
+          <div class="kpi-box kpi-primary"><div class="kl">Spend</div><div class="kv" id="g_spend">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Conversions</div><div class="kv" id="g_conv">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Revenue</div><div class="kv" id="g_rev">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">ROAS</div><div class="kv" id="g_roas">—</div></div>
+          <div class="kpi-box"><div class="kl">Conv. Rate</div><div class="kv kv-sm" id="g_cvr">—</div></div>
+          <div class="kpi-box"><div class="kl">AOV</div><div class="kv kv-sm" id="g_aov">—</div></div>
+          <div class="kpi-box"><div class="kl">CTR</div><div class="kv kv-sm" id="g_ctr">—</div></div>
+          <div class="kpi-box"><div class="kl">CPC</div><div class="kv kv-sm" id="g_cpc">—</div></div>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><div class="fn">Impressions</div><div class="fv" id="g_imps">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Clicks</div><div class="fv" id="g_clicks">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Conversions</div><div class="fv" id="g_conv2">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CPA</div><div class="fv" id="g_cpa">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Campaigns</div><div class="fv" id="g_camps">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="insights-overview" style="margin:10px 0 4px;"></div>
+  <div class="ppanels">
+    <div class="ppanel">
+      <div class="ppanel-hdr bing-h"><span style="font-size:13px;font-weight:900;">B</span> Bing Ads — D2C</div>
+      <div class="ppanel-body">
+        <div class="kpi-grid">
+          <div class="kpi-box kpi-primary"><div class="kl">Spend</div><div class="kv" id="b_spend">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Orders</div><div class="kv" id="b_orders">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Revenue</div><div class="kv" id="b_rev">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">ROAS</div><div class="kv" id="b_roas">—</div></div>
+          <div class="kpi-box"><div class="kl">Conv. Rate</div><div class="kv kv-sm" id="b_cvr">—</div></div>
+          <div class="kpi-box"><div class="kl">AOV</div><div class="kv kv-sm" id="b_aov">—</div></div>
+          <div class="kpi-box"><div class="kl">CAC</div><div class="kv kv-sm" id="b_cac">—</div></div>
+          <div class="kpi-box"><div class="kl">Clicks</div><div class="kv kv-sm" id="b_clicks">—</div></div>
+        </div>
+        <div class="funnel">
+          <div class="fstep"><div class="fn">Clicks</div><div class="fv" id="b_clicks2">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">ATC</div><div class="fv" id="b_atc">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Checkouts</div><div class="fv" id="b_chk">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">Orders</div><div class="fv" id="b_orders2">—</div></div>
+          <div class="farr">›</div>
+          <div class="fstep"><div class="fn">CPA</div><div class="fv" id="b_cpa">—</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ppanel">
+      <div class="ppanel-hdr aff-h"><span style="font-size:13px;font-weight:900;">A</span> Affiliate</div>
+      <div class="ppanel-body">
+        <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr);">
+          <div class="kpi-box kpi-primary"><div class="kl">Spend</div><div class="kv" id="a_spend">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Orders</div><div class="kv" id="a_orders">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">Revenue</div><div class="kv" id="a_rev">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">ROAS</div><div class="kv" id="a_roas">—</div></div>
+          <div class="kpi-box kpi-primary"><div class="kl">AOV</div><div class="kv" id="a_aov">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-hdr">
+      <h3 id="chartTitle">Daily Spend Trend</h3>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <div class="cleg" id="platformToggles" style="flex-wrap:wrap;justify-content:flex-end;">
+          <button class="plt-tog active" data-idx="0" style="--c:#1877F2" onclick="togglePlatform(0,this)"><span class="cdot" style="background:#1877F2"></span>Meta</button>
+          <button class="plt-tog active" data-idx="1" style="--c:#34A853" onclick="togglePlatform(1,this)"><span class="cdot" style="background:#34A853"></span>Google</button>
+          <button class="plt-tog active" data-idx="2" style="--c:#D4A017" onclick="togglePlatform(2,this)"><span class="cdot" style="background:#D4A017"></span>Bing</button>
+          <button class="plt-tog active" data-idx="3" style="--c:#7B5EA7" onclick="togglePlatform(3,this)"><span class="cdot" style="background:#7B5EA7"></span>Affiliate</button>
+        </div>
+        <div class="range-pills" style="gap:4px;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="rpill active" id="mpill-spend" onclick="switchMetric('spend',this)">Spend</button>
+          <button class="rpill" id="mpill-cpc" onclick="switchMetric('cpc',this)">CPC</button>
+          <button class="rpill" id="mpill-roas" onclick="switchMetric('roas',this)">ROAS</button>
+          <button class="rpill" id="mpill-cvr" onclick="switchMetric('cvr',this)">Conv Rate</button>
+        </div>
+      </div>
+    </div>
+    <div style="position:relative;height:160px;width:100%;"><canvas id="trendChart"></canvas></div>
+  </div>
+</div>
+
+<!-- DAILY TABLE TAB -->
+<div class="tab" id="tab-daily">
+  <div class="stitle">Day-by-Day Performance</div>
+  <div class="table-card">
+    <div class="ttabs">
+      <button class="ttbtn active" onclick="switchSub('daily','overall')">Overall</button>
+      <button class="ttbtn" onclick="switchSub('daily','meta')">Meta</button>
+      <button class="ttbtn" onclick="switchSub('daily','google')">Google</button>
+      <button class="ttbtn" onclick="switchSub('daily','bing')">Bing</button>
+      <button class="ttbtn" onclick="switchSub('daily','affiliate')">Affiliate</button>
+    </div>
+    <div class="tcontent active" id="dt-overall"><div class="twrap"><table><thead id="dth-overall"></thead><tbody id="dtb-overall"></tbody></table></div></div>
+    <div class="tcontent" id="dt-meta"><div class="twrap"><table><thead id="dth-meta"></thead><tbody id="dtb-meta"></tbody></table></div></div>
+    <div class="tcontent" id="dt-google"><div class="twrap"><table><thead id="dth-google"></thead><tbody id="dtb-google"></tbody></table></div></div>
+    <div class="tcontent" id="dt-bing"><div class="twrap"><table><thead id="dth-bing"></thead><tbody id="dtb-bing"></tbody></table></div></div>
+    <div class="tcontent" id="dt-affiliate"><div class="twrap"><table><thead id="dth-affiliate"></thead><tbody id="dtb-affiliate"></tbody></table></div></div>
+  </div>
+  <div class="insight-card" id="insights-daily" style="margin-top:10px;"></div>
+</div>
+
+<!-- WEEKLY SPLIT TAB -->
+<div class="tab" id="tab-weekly">
+  <div class="stitle">Week-over-Week Split</div>
+  <div class="table-card">
+    <div class="wsub">
+      <button class="wsb active" onclick="switchWk('overall')">Overall</button>
+      <button class="wsb" onclick="switchWk('meta')">Meta</button>
+      <button class="wsb" onclick="switchWk('google')">Google</button>
+    </div>
+    <div class="wcontent active" id="wk-overall"><div class="twrap"><table><thead id="wth-overall"></thead><tbody id="wtb-overall"></tbody></table></div></div>
+    <div class="wcontent" id="wk-meta"><div class="twrap"><table><thead id="wth-meta"></thead><tbody id="wtb-meta"></tbody></table></div></div>
+    <div class="wcontent" id="wk-google"><div class="twrap"><table><thead id="wth-google"></thead><tbody id="wtb-google"></tbody></table></div></div>
+  </div>
+  <div id="insights-weekly" style="margin-top:10px;"></div>
+</div>
+
+<!-- CAMPAIGNS TAB -->
+<div class="tab" id="tab-campaigns">
+  <div class="stitle">Campaign Performance</div>
+  <div class="table-card">
+    <div class="ttabs">
+      <button class="ttbtn active" onclick="switchSub('camp','meta')">Meta D2C</button>
+      <button class="ttbtn" onclick="switchSub('camp','google')">Google D2C</button>
+      <button class="ttbtn" onclick="switchSub('camp','bing')">Bing D2C</button>
+    </div>
+    <div class="tcontent active" id="ct-meta">
+      <div class="twrap"><table>
+        <thead><tr><th>Campaign</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr></thead>
+        <tbody id="ctb-meta"></tbody>
+      </table></div>
+    </div>
+    <div class="tcontent" id="ct-google">
+      <div class="twrap"><table>
+        <thead><tr><th>Campaign</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr></thead>
+        <tbody id="ctb-google"></tbody>
+      </table></div>
+    </div>
+    <div class="tcontent" id="ct-bing">
+      <div class="twrap"><table>
+        <thead><tr><th>Campaign</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>ROAS</th><th>AOV</th><th>CVR</th><th>CAC</th></tr></thead>
+        <tbody id="ctb-bing"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<!-- SALE EVENTS TAB -->
+<div class="tab" id="tab-sales">
+  <div class="sale-month-bar">
+    <span class="sale-month-lbl">Select Month</span>
+    <button class="smpill" data-m="2026-01" onclick="setSaleMonth('2026-01',this)">Jan</button>
+    <button class="smpill" data-m="2026-02" onclick="setSaleMonth('2026-02',this)">Feb</button>
+    <button class="smpill" data-m="2026-03" onclick="setSaleMonth('2026-03',this)">Mar</button>
+    <button class="smpill" data-m="2026-04" onclick="setSaleMonth('2026-04',this)">Apr</button>
+    <button class="smpill active" data-m="2026-06" onclick="setSaleMonth('2026-06',this)">Jun</button>
+  </div>
+  <div id="sale-no-data" class="sale-notice hidden">⏳ Loading…</div>
+  <div class="sale-events-grid" id="sale-events-grid">
+    <!-- Mega Sale -->
+    <div class="sale-card" id="mega-card">
+      <div class="sale-card-hdr mega-hdr">
+        <span class="sale-emoji">🔥</span>
+        <div>
+          <div class="sale-title">Mega Sale</div>
+          <div class="sale-dates" id="mega-dates">—</div>
+        </div>
+      </div>
+      <div id="mega-body">
+        <div class="sale-kpis" id="mega-kpis"></div>
+        <div class="sale-table-wrap">
+          <table class="sale-table">
+            <thead><tr><th>Platform</th><th>Spend</th><th>Revenue</th><th>ROAS</th><th>Orders</th><th>CAC</th><th>AOV</th><th>Daily Spend</th><th>Daily Rev</th></tr></thead>
+            <tbody id="mega-tbody"></tbody>
+          </table>
+        </div>
+        <div class="sale-dod-hdr">Day on Day</div>
+        <div class="sale-table-wrap">
+          <table class="sale-table sale-dod-table">
+            <thead><tr><th>Date</th><th>M Spend</th><th>G Spend</th><th>B Spend</th><th>Aff Spend</th><th>Total Spend</th><th>Revenue</th><th>ROAS</th><th>Orders</th><th>CAC</th><th>AOV</th></tr></thead>
+            <tbody id="mega-dod-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="mega-nosale" class="sale-nosale hidden">No Mega Sale this month</div>
+    </div>
+    <!-- Mini Sale -->
+    <div class="sale-card" id="mini-card">
+      <div class="sale-card-hdr mini-hdr">
+        <span class="sale-emoji">⚡</span>
+        <div>
+          <div class="sale-title">Mini Sale</div>
+          <div class="sale-dates" id="mini-dates">—</div>
+        </div>
+      </div>
+      <div id="mini-body">
+        <div class="sale-kpis" id="mini-kpis"></div>
+        <div class="sale-table-wrap">
+          <table class="sale-table">
+            <thead><tr><th>Platform</th><th>Spend</th><th>Revenue</th><th>ROAS</th><th>Orders</th><th>CAC</th><th>AOV</th><th>Daily Spend</th><th>Daily Rev</th></tr></thead>
+            <tbody id="mini-tbody"></tbody>
+          </table>
+        </div>
+        <div class="sale-dod-hdr">Day on Day</div>
+        <div class="sale-table-wrap">
+          <table class="sale-table sale-dod-table">
+            <thead><tr><th>Date</th><th>M Spend</th><th>G Spend</th><th>B Spend</th><th>Aff Spend</th><th>Total Spend</th><th>Revenue</th><th>ROAS</th><th>Orders</th><th>CAC</th><th>AOV</th></tr></thead>
+            <tbody id="mini-dod-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="mini-nosale" class="sale-nosale hidden">No Mini Sale this month</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA FETCHING — Windsor.ai REST API
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * Fetch data from Windsor.ai REST API.
+ * Windsor.ai endpoint format:
+ *   GET /connector?api_key=KEY&fields=f1,f2&date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&account_id=ACC
+ *
+ * For Google Sheets, account_id is the sheet tab ID (spreadsheetId-gid).
+ */
+async function windsorFetch({ connector, accounts, fields, date_from, date_to }) {
+  // Build URL manually — URLSearchParams percent-encodes commas which breaks Windsor's
+  // comma-separated fields parsing, and encodes parentheses in field names like bing_(d2c).
+  let url = `${CONFIG.WINDSOR_API_BASE}/${connector}?api_key=${CONFIG.WINDSOR_API_KEY}&fields=${fields.join(',')}`;
+  if (date_from) url += `&date_from=${date_from}`;
+  if (date_to)   url += `&date_to=${date_to}`;
+  accounts.forEach(a => { url += `&account_id=${encodeURIComponent(a)}`; });
+
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Windsor ${connector}: HTTP ${resp.status}`);
+  const json = await resp.json();
+  // Windsor returns { data: [...] } or just an array
+  return Array.isArray(json) ? json : (json.data || json.result || []);
+}
+
+// Returns only the sheet account IDs needed for the given date range
+function sheetAccountsForRange(from, to) {
+  const map = CONFIG.SHEET_ACCOUNTS_BY_MONTH;
+  const needed = new Set();
+  let cur = new Date(from);
+  const end = new Date(to);
+  while (cur <= end) {
+    const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}`;
+    if (map[key]) needed.add(map[key]);
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return [...needed];
+}
+
+// ═══════════════════════════════════════════════════════════
+// SHEET FIELD SETS
+// ═══════════════════════════════════════════════════════════
+const SHEET_FIELDS_AFF  = ['month','_1','_2','_8','_9','_24','_25','_40','_41','affiliate'];
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const S = { meta:[], google:[], bing:[], sheet:{}, from:'', to:'' };
+
+// ═══════════════════════════════════════════════════════════
+// SHEET PARSERS
+// ═══════════════════════════════════════════════════════════
+function parseSheetNum(v) {
+  if (v == null || v === '' || v === '-' || v === '—') return 0;
+  let s = String(v).replace(/[₹\s]/g, '').replace(/%$/, '');
+  if (!s || s === '0' || s === '0.00') return 0;
+  s = s.replace(/,/g, '');
+  const parts = s.split('.');
+  if (parts.length === 1) return parseFloat(s) || 0;
+  if (parts.length > 2) return parseFloat(parts.join('')) || 0;
+  if (parts[1].length === 3) return parseFloat(parts[0] + parts[1]) || 0;
+  return parseFloat(s) || 0;
+}
+function parseSheetPct(v) {
+  if (v == null || v === '' || v === '-') return 0;
+  return parseFloat(String(v).replace(/%/, '')) / 100 || 0;
+}
+function parseSheetDate(v) {
+  if (!v) return null;
+  const m = String(v).match(/^(\d{1,2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return null;
+}
+
+function parseSheetRows(rows) {
+  const out = {};
+  rows.forEach(r => {
+    const dateStr = parseSheetDate(r.month);
+    if (!dateStr) return;
+    // Affiliate = total minus Google, Bing (sheet), Meta
+    const spend    = parseSheetNum(r['affiliate']);
+    const totalOrd = parseSheetNum(r['_1']),  totalRev = parseSheetNum(r['_2']);
+    const googOrd  = parseSheetNum(r['_8']),  googRev  = parseSheetNum(r['_9']);
+    const bingOrd  = parseSheetNum(r['_24']), bingRev  = parseSheetNum(r['_25']);
+    const metaOrd  = parseSheetNum(r['_40']), metaRev  = parseSheetNum(r['_41']);
+    out[dateStr] = {
+      date: dateStr,
+      affiliate: {
+        spend,
+        orders:  Math.max(0, totalOrd - googOrd - bingOrd - metaOrd),
+        revenue: Math.max(0, totalRev - googRev - bingRev - metaRev),
+      }
+    };
+  });
+  return out;
+}
+
+function aggregateSheet(sheetMap, dateFrom, dateTo) {
+  const rows = Object.values(sheetMap).filter(d => d.date >= dateFrom && d.date <= dateTo);
+  const aff  = { spend:0, revenue:0, orders:0 };
+  rows.forEach(d => {
+    aff.spend += d.affiliate.spend; aff.revenue += d.affiliate.revenue; aff.orders += d.affiliate.orders;
+  });
+  aff.roas = aff.spend>0&&aff.revenue>0 ? aff.revenue/aff.spend : 0;
+  aff.cac  = aff.orders>0 ? aff.spend/aff.orders : 0;
+  return { affiliate: aff };
+}
+
+// Aggregate Windsor Bing rows (same field names as Google Ads)
+function aggregateBing(rows, dateFrom, dateTo) {
+  const filtered = rows.filter(r => r.date >= dateFrom && r.date <= dateTo);
+  const spend   = sum(filtered,'spend'),    imps   = sum(filtered,'impressions');
+  const clicks  = sum(filtered,'clicks'),   orders = sum(filtered,'conversions_qualified');
+  const revenue = sum(filtered,'revenue');
+  const roas = spend>0&&revenue>0 ? revenue/spend : 0;
+  const aov  = orders>0 ? revenue/orders : 0;
+  const cvr  = clicks>0&&orders>0 ? orders/clicks : 0;
+  const cac  = orders>0 ? spend/orders : 0;
+  const cpm  = imps>0 ? spend/imps*1000 : 0;
+  const cpc  = clicks>0 ? spend/clicks : 0;
+  return { spend, imps, clicks, orders, revenue, roas, aov, cvr, cac, cpm, cpc };
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONVERSION OVERRIDES
+// ═══════════════════════════════════════════════════════════
+function applyConversionOverrides(rows) {
+  const byDateMap = {};
+  rows.forEach(r => { (byDateMap[r.date] = byDateMap[r.date]||[]).push(r); });
+  const out = [];
+  Object.entries(byDateMap).forEach(([date, dayRows]) => {
+    const override = CONFIG.CONV_OVERRIDES[date];
+    if (override === undefined) { out.push(...dayRows); return; }
+    const origTotal = dayRows.reduce((s,r) => s + (parseFloat(r.conversions)||0), 0);
+    const scale = origTotal > 0 ? override / origTotal : 0;
+    dayRows.forEach(r => out.push({ ...r, conversions: (parseFloat(r.conversions)||0)*scale, _overridden:true }));
+  });
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMATTERS
+// ═══════════════════════════════════════════════════════════
+let trendInst = null;
+const _ind = (n,d=0) => Math.abs(n)<0.005&&d>0?n.toFixed(d):n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const rs  = n => { if(n==null||isNaN(n))return'—'; return '₹'+_ind(Math.round(n)); };
+const rss = n => { if(n==null||isNaN(n))return'—'; return '₹'+_ind(Math.round(n)); };
+const num = (n,d=0) => { if(n==null||isNaN(n))return'—'; return _ind(+n.toFixed(d),d); };
+const pct = n=>{ if(n==null||isNaN(n)||n===0)return'—'; return(n*100).toFixed(2)+'%'; };
+const roas= n=>{ if(!n||n<=0)return'—'; return n.toFixed(2)+'x'; };
+const safe= n=>parseFloat(n)||0;
+const sum =(arr,k)=>arr.reduce((a,r)=>a+safe(r[k]),0);
+
+function calcMetrics(rows, platform) {
+  const spend=sum(rows,'spend'), imps=sum(rows,'impressions'), clicks=sum(rows,'clicks');
+  const cpm=imps>0?spend/imps*1000:0, ctr=imps>0?clicks/imps:0, cpc=clicks>0?spend/clicks:0;
+  if(platform==='meta'){
+    const atc=sum(rows,'actions_omni_add_to_cart'), chk=sum(rows,'actions_omni_initiated_checkout');
+    const purch=sum(rows,'actions_omni_purchase'), rev=sum(rows,'action_values_omni_purchase');
+    const roasV=spend>0&&rev>0?rev/spend:0, aov=purch>0?rev/purch:0;
+    const cvr=clicks>0&&purch>0?purch/clicks:0, cac=purch>0?spend/purch:0;
+    return {spend,imps,clicks,cpm,ctr,cpc,atc,chk,purch,rev,roas:roasV,aov,cvr,cac};
+  }
+  if(platform==='google'){
+    const conv=sum(rows,'conversions'), rev=sum(rows,'conversions_value');
+    const roasV=spend>0&&rev>0?rev/spend:0, aov=conv>0?rev/conv:0;
+    const cvr=clicks>0&&conv>0?conv/clicks:0, cpa=conv>0?spend/conv:0;
+    return {spend,imps,clicks,cpm,ctr,cpc,conv,rev,roas:roasV,aov,cvr,cpa};
+  }
+  return {spend,imps,clicks,cpm,ctr,cpc};
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════════════════
+function fmtDate(s){ const d=new Date(s+'T00:00:00'); return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+function isoDate(d){ return d.toISOString().split('T')[0]; }
+function localDate(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function daysAgo(n){ const d=new Date(); d.setDate(d.getDate()-n); return localDate(d); }
+function getWeek(dateStr){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDay(), diff=d.getDate()-day+(day===0?-6:1);
+  const mon=new Date(d.setDate(diff)), sun=new Date(mon);
+  sun.setDate(sun.getDate()+6);
+  return isoDate(mon)+' – '+fmtDate(isoDate(sun));
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI CONTROLS
+// ═══════════════════════════════════════════════════════════
+function setRange(r) {
+  document.querySelectorAll('.rpill').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  const d1=document.getElementById('d1'), d2=document.getElementById('d2');
+  if(r==='today'){ d1.value=isoDate(new Date()); d2.value=isoDate(new Date()); }
+  else if(r==='yesterday'){ d1.value=daysAgo(1); d2.value=daysAgo(1); }
+  else if(r==='7d'){ d1.value=daysAgo(7); d2.value=daysAgo(1); }
+  else if(r==='14d'){ d1.value=daysAgo(14); d2.value=daysAgo(1); }
+  else if(r==='30d'){ d1.value=daysAgo(30); d2.value=daysAgo(1); }
+  else if(r==='this-month'){ const t=new Date(); d1.value=localDate(new Date(t.getFullYear(),t.getMonth(),1)); d2.value=localDate(t); }
+  else if(r==='last-month'){ const t=new Date(); const f=new Date(t.getFullYear(),t.getMonth()-1,1); const l=new Date(t.getFullYear(),t.getMonth(),0); d1.value=localDate(f); d2.value=localDate(l); }
+  else if(r==='mega-sale'){ d1.value='2026-06-06'; d2.value='2026-06-15'; }
+  else if(r==='mini-sale'){ d1.value='2026-06-16'; d2.value='2026-06-20'; }
+  load();
+}
+function switchTab(name) {
+  document.querySelectorAll('.tbbtn').forEach((b,i)=>b.classList.toggle('active',['overview','daily','weekly','campaigns','sales'][i]===name));
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='sales') { prefetchAllSaleMonths(); renderSaleEvents(); }
+}
+function switchSub(group, name) {
+  const prefix=group==='daily'?'dt':'ct';
+  event.target.closest('.table-card').querySelectorAll('.ttbtn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  event.target.closest('.table-card').querySelectorAll('.tcontent').forEach(el=>el.classList.remove('active'));
+  document.getElementById(prefix+'-'+name).classList.add('active');
+}
+function switchWk(name) {
+  document.querySelectorAll('.wsb').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.wcontent').forEach(el=>el.classList.remove('active'));
+  document.getElementById('wk-'+name).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGGREGATORS
+// ═══════════════════════════════════════════════════════════
+function byDate(rows, platform) {
+  const m={};
+  rows.forEach(r=>{
+    if(!m[r.date]) m[r.date]={date:r.date,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};
+    const d=m[r.date];
+    d.spend+=safe(r.spend); d.impressions+=safe(r.impressions); d.clicks+=safe(r.clicks);
+    if(platform==='meta'){
+      d.actions_omni_add_to_cart+=safe(r.actions_omni_add_to_cart);
+      d.actions_omni_initiated_checkout+=safe(r.actions_omni_initiated_checkout);
+      d.actions_omni_purchase+=safe(r.actions_omni_purchase);
+      d.action_values_omni_purchase+=safe(r.action_values_omni_purchase);
+    } else { d.conversions+=safe(r.conversions); d.conversions_value+=safe(r.conversions_value); }
+  });
+  return Object.values(m).sort((a,b)=>a.date>b.date?1:-1);
+}
+function byWeek(rows, platform) {
+  const dated=byDate(rows,platform), m={};
+  dated.forEach(r=>{
+    const wk=getWeek(r.date);
+    if(!m[wk]) m[wk]={week:wk,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};
+    const d=m[wk];
+    d.spend+=r.spend; d.impressions+=r.impressions; d.clicks+=r.clicks;
+    d.actions_omni_add_to_cart+=r.actions_omni_add_to_cart;
+    d.actions_omni_initiated_checkout+=r.actions_omni_initiated_checkout;
+    d.actions_omni_purchase+=r.actions_omni_purchase;
+    d.action_values_omni_purchase+=r.action_values_omni_purchase;
+    d.conversions+=r.conversions; d.conversions_value+=r.conversions_value;
+  });
+  return Object.values(m);
+}
+function byCampaign(rows, platform) {
+  const m={};
+  rows.forEach(r=>{
+    const key=r.campaign_name;
+    if(!m[key]) m[key]={campaign_name:key,spend:0,impressions:0,clicks:0,
+      actions_omni_add_to_cart:0,actions_omni_initiated_checkout:0,actions_omni_purchase:0,action_values_omni_purchase:0,
+      conversions:0,conversions_value:0};
+    const d=m[key];
+    d.spend+=safe(r.spend); d.impressions+=safe(r.impressions); d.clicks+=safe(r.clicks);
+    if(platform==='meta'){
+      d.actions_omni_add_to_cart+=safe(r.actions_omni_add_to_cart);
+      d.actions_omni_initiated_checkout+=safe(r.actions_omni_initiated_checkout);
+      d.actions_omni_purchase+=safe(r.actions_omni_purchase);
+      d.action_values_omni_purchase+=safe(r.action_values_omni_purchase);
+    } else { d.conversions+=safe(r.conversions); d.conversions_value+=safe(r.conversions_value); }
+  });
+  return Object.values(m).sort((a,b)=>b.spend-a.spend);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER HELPERS
+// ═══════════════════════════════════════════════════════════
+function metaTypeBadge(n){ if(/Remarketing|DPA/i.test(n))return'<span class="badge b-rema">RMK</span>'; if(/Lookalike/i.test(n))return'<span class="badge b-look">LAL</span>'; return'<span class="badge b-pros">PRO</span>'; }
+function googleTypeBadge(n){ if(/Pmax|PMax/i.test(n))return'<span class="badge b-pmax">PMax</span>'; if(/Shopping/i.test(n))return'<span class="badge b-shop">Shop</span>'; if(/Search/i.test(n))return'<span class="badge b-srch">Search</span>'; return'<span class="badge b-oth">Other</span>'; }
+function cpaClass(v){ if(!v||v<=0)return''; return v>10000?'red':v<3000?'grn':''; }
+function roasClass(v){ if(!v||v<=0)return''; return v<1?'red':v>=3?'grn':''; }
+function ctrClass(v){ if(!v)return''; return v<0.005?'red':v>0.03?'grn':''; }
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — SUMMARY STRIP
+// ═══════════════════════════════════════════════════════════
+function renderSummary(meta, google, sheetAgg) {
+  const m=calcMetrics(meta,'meta'), g=calcMetrics(google,'google');
+  const b=sheetAgg?sheetAgg.bing:{spend:0,orders:0,revenue:0};
+  const a=sheetAgg?sheetAgg.affiliate:{spend:0,orders:0,revenue:0};
+  const ts=m.spend+g.spend+b.spend+a.spend, tr_=m.rev+g.rev+b.revenue+a.revenue;
+  const tp=m.purch+g.conv+b.orders+a.orders, tc=m.clicks+g.clicks;
+  document.getElementById('s_spend').textContent=rs(ts);
+  document.getElementById('s_spend_s').innerHTML=`<b>M:</b> ${rs(m.spend)} &nbsp;<b>G:</b> ${rs(g.spend)} &nbsp;<b>B:</b> ${rs(b.spend)} &nbsp;<b>Aff:</b> ${rs(a.spend)}`;
+  document.getElementById('s_purch').textContent=num(tp,1);
+  document.getElementById('s_purch_s').innerHTML=`<b>M:</b> ${num(m.purch,1)} &nbsp;<b>G:</b> ${num(g.conv,1)} &nbsp;<b>B:</b> ${num(b.orders,1)} &nbsp;<b>Aff:</b> ${num(a.orders,1)}`;
+  document.getElementById('s_rev').textContent=rs(tr_);
+  document.getElementById('s_rev_s').innerHTML=`<b>M:</b> ${rs(m.rev)} &nbsp;<b>G:</b> ${rs(g.rev)} &nbsp;<b>B:</b> ${rs(b.revenue)} &nbsp;<b>Aff:</b> ${rs(a.revenue)}`;
+  document.getElementById('s_roas').textContent=roas(ts>0&&tr_>0?tr_/ts:0);
+  document.getElementById('s_roas_s').innerHTML=`<b>M:</b> ${roas(m.roas)} &nbsp;<b>G:</b> ${roas(g.roas)}`;
+  document.getElementById('s_cvr').textContent=pct(tc>0&&tp>0?tp/tc:0);
+  document.getElementById('s_aov').textContent=rs(tp>0?tr_/tp:0);
+  const blendCac=tp>0?ts/tp:0;
+  document.getElementById('s_cac').textContent=rs(blendCac);
+  document.getElementById('s_cac').className='val'+(blendCac>10000?' red':blendCac>0&&blendCac<3000?' grn':'');
+  document.getElementById('s_cac_s').innerHTML=`<b>M:</b> ${rs(m.cac)} &nbsp;<b>G:</b> ${rs(m.purch>0?g.spend/g.conv:0)}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — PLATFORM PANELS
+// ═══════════════════════════════════════════════════════════
+function renderPanels(meta, google) {
+  const m=calcMetrics(meta,'meta'), g=calcMetrics(google,'google');
+  const mCpa=m.purch>0?m.spend/m.purch:0;
+  document.getElementById('m_spend').textContent=rs(m.spend); document.getElementById('m_purch').textContent=num(m.purch,1);
+  document.getElementById('m_rev').textContent=rss(m.rev);    document.getElementById('m_roas').textContent=roas(m.roas);
+  document.getElementById('m_cvr').textContent=pct(m.cvr);   document.getElementById('m_aov').textContent=rs(m.aov);
+  document.getElementById('m_ctr').textContent=pct(m.ctr);   document.getElementById('m_cpc').textContent=rs(m.cpc);
+  document.getElementById('m_atc').textContent=num(m.atc,0); document.getElementById('m_chk').textContent=num(m.chk,0);
+  document.getElementById('m_purch2').textContent=num(m.purch,1); document.getElementById('m_cpa').textContent=mCpa>0?rs(mCpa):'—';
+  document.getElementById('m_camps').textContent=meta.length>0?[...new Set(meta.map(r=>r.campaign_name))].length:'—';
+  document.getElementById('g_spend').textContent=rs(g.spend); document.getElementById('g_conv').textContent=num(g.conv,1);
+  document.getElementById('g_rev').textContent=rss(g.rev);   document.getElementById('g_roas').textContent=roas(g.roas);
+  document.getElementById('g_cvr').textContent=pct(g.cvr);   document.getElementById('g_aov').textContent=rs(g.aov);
+  document.getElementById('g_ctr').textContent=pct(g.ctr);   document.getElementById('g_cpc').textContent=rs(g.cpc);
+  document.getElementById('g_imps').textContent=num(g.imps); document.getElementById('g_clicks').textContent=num(g.clicks);
+  document.getElementById('g_conv2').textContent=num(g.conv,1); document.getElementById('g_cpa').textContent=g.cpa>0?rs(g.cpa):'—';
+  document.getElementById('g_camps').textContent=google.length>0?[...new Set(google.map(r=>r.campaign_name))].length:'—';
+}
+function renderBingPanel(b) {
+  document.getElementById('b_spend').textContent=rs(b.spend);   document.getElementById('b_orders').textContent=num(b.orders,0);
+  document.getElementById('b_rev').textContent=rss(b.revenue);  document.getElementById('b_roas').textContent=roas(b.roas);
+  document.getElementById('b_cvr').textContent=pct(b.cvr);      document.getElementById('b_aov').textContent=rs(b.aov);
+  document.getElementById('b_cac').textContent=rs(b.cac);       document.getElementById('b_clicks').textContent=num(b.clicks);
+  document.getElementById('b_clicks2').textContent=num(b.clicks); document.getElementById('b_atc').textContent=num(b.atc,0);
+  document.getElementById('b_chk').textContent=num(b.checkouts,0); document.getElementById('b_orders2').textContent=num(b.orders,0);
+  document.getElementById('b_cpa').textContent=b.cac>0?rs(b.cac):'—';
+}
+function renderAffPanel(a) {
+  const aov=a.orders>0?a.revenue/a.orders:0;
+  document.getElementById('a_spend').textContent=rs(a.spend);   document.getElementById('a_orders').textContent=num(a.orders,1);
+  document.getElementById('a_rev').textContent=rss(a.revenue);  document.getElementById('a_roas').textContent=roas(a.roas);
+  document.getElementById('a_aov').textContent=rs(aov);
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — TREND CHART
+// ═══════════════════════════════════════════════════════════
+let currentMetric='spend';
+const platformVisible=[true,true,true,true]; // Meta, Google, Bing, Affiliate
+const metricConfig={
+  spend:{label:'Daily Spend Trend',    fmt:v=>`₹${_ind(Math.round(v))}`,  yFmt:v=>'₹'+_ind(Math.round(v))},
+  cpc:  {label:'Daily CPC Trend',      fmt:v=>`₹${_ind(v,2)}`,            yFmt:v=>'₹'+_ind(Math.round(v))},
+  roas: {label:'Daily ROAS Trend',     fmt:v=>`${v.toFixed(2)}x`,         yFmt:v=>v.toFixed(1)+'x'},
+  cvr:  {label:'Daily CVR Trend',      fmt:v=>`${v.toFixed(2)}%`,         yFmt:v=>v.toFixed(2)+'%'},
+};
+function getDailyVal(row, platform, metric) {
+  const sp=row.spend, cl=row.clicks;
+  const rev=platform==='meta'?row.action_values_omni_purchase:row.conversions_value;
+  const pr =platform==='meta'?row.actions_omni_purchase:row.conversions;
+  if(metric==='spend')return+sp.toFixed(0);
+  if(metric==='cpc')  return cl>0?+(sp/cl).toFixed(2):0;
+  if(metric==='roas') return sp>0&&rev>0?+(rev/sp).toFixed(3):0;
+  if(metric==='cvr')  return cl>0&&pr>0?+(pr/cl*100).toFixed(3):0;
+  return 0;
+}
+function getBingVal(b, metric) {
+  // b is a Windsor-aggregated day object: {spend, clicks, conversions_qualified, revenue}
+  if(!b||!b.spend||b.spend===0) return null;
+  if(metric==='spend')return b.spend;
+  if(metric==='cpc')  return b.clicks>0?+(b.spend/b.clicks).toFixed(2):null;
+  if(metric==='roas') return b.spend>0&&b.revenue>0?+(b.revenue/b.spend).toFixed(3):null;
+  if(metric==='cvr')  return b.clicks>0&&b.conversions_qualified>0?+(b.conversions_qualified/b.clicks*100).toFixed(3):null;
+  return null;
+}
+function getAffVal(sheetRow, metric) {
+  if(!sheetRow) return null;
+  const a=sheetRow.affiliate; if(!a||a.spend===0) return null;
+  // Affiliate has no clicks data — CPC and CVR not available
+  if(metric==='spend')return a.spend;
+  if(metric==='roas') return a.spend>0&&a.revenue>0?+(a.revenue/a.spend).toFixed(3):null;
+  return null; // cpc, cvr — not available for affiliate
+}
+function togglePlatform(idx, btn) {
+  if(!trendInst) return;
+  platformVisible[idx] = !platformVisible[idx];
+  trendInst.setDatasetVisibility(idx, platformVisible[idx]);
+  trendInst.update();
+  btn.classList.toggle('active', platformVisible[idx]);
+}
+function switchMetric(metric, btn) {
+  currentMetric=metric;
+  document.querySelectorAll('[id^="mpill-"]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTrend(S.meta, S.google);
+}
+function renderTrend(meta, google) {
+  const mD=byDate(meta,'meta'), gD=byDate(google,'google');
+  // Build Windsor Bing date map
+  const bingDateMap={};
+  S.bing.forEach(r=>{ if(!bingDateMap[r.date])bingDateMap[r.date]={spend:0,clicks:0,conversions_qualified:0,revenue:0}; const d=bingDateMap[r.date]; d.spend+=safe(r.spend); d.clicks+=safe(r.clicks); d.conversions_qualified+=safe(r.conversions_qualified); d.revenue+=safe(r.revenue); });
+  const sheetDates=Object.keys(S.sheet).filter(d=>d>=S.from&&d<=S.to).sort();
+  const allDates=[...new Set([...mD.map(r=>r.date),...gD.map(r=>r.date),...Object.keys(bingDateMap).filter(d=>d>=S.from&&d<=S.to),...sheetDates])].sort();
+  const mMap=Object.fromEntries(mD.map(r=>[r.date,r])), gMap=Object.fromEntries(gD.map(r=>[r.date,r]));
+  const cfg=metricConfig[currentMetric], pr=allDates.length<=10?4:2;
+  document.getElementById('chartTitle').textContent=cfg.label;
+  if(trendInst){trendInst.destroy();trendInst=null;}
+  trendInst=new Chart(document.getElementById('trendChart').getContext('2d'),{type:'line',
+    data:{labels:allDates.map(fmtDate),datasets:[
+      {label:'Meta',      data:allDates.map(d=>mMap[d]?getDailyVal(mMap[d],'meta',currentMetric):null),  spanGaps:true,borderColor:'#1877F2',borderWidth:2,pointRadius:pr,tension:.35,fill:false},
+      {label:'Google',    data:allDates.map(d=>gMap[d]?getDailyVal(gMap[d],'google',currentMetric):null),spanGaps:true,borderColor:'#34A853',borderWidth:2,pointRadius:pr,tension:.35,fill:false},
+      {label:'Bing',      data:allDates.map(d=>getBingVal(bingDateMap[d],currentMetric)),                spanGaps:true,borderColor:'#0078D4',borderWidth:2,pointRadius:pr,tension:.35,fill:false},
+      {label:'Affiliate', data:allDates.map(d=>getAffVal(S.sheet[d],currentMetric)),                     spanGaps:true,borderColor:'#7B5EA7',borderWidth:2,pointRadius:pr,tension:.35,fill:false},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw!=null?` ${c.dataset.label}: ${cfg.fmt(c.raw)}`:''}}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,autoSkipPadding:8}},y:{grid:{color:'#f0f0f0'},ticks:{font:{size:9},callback:cfg.yFmt}}}
+    }
+  });
+  // Restore platform visibility state after chart rebuild
+  platformVisible.forEach((vis,i)=>{
+    trendInst.setDatasetVisibility(i,vis);
+    const btn=document.querySelector(`.plt-tog[data-idx="${i}"]`);
+    if(btn) btn.classList.toggle('active',vis);
+  });
+  trendInst.update();
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — DAILY TABLE
+// ═══════════════════════════════════════════════════════════
+function renderDailyTable(meta, google, sheetMap, bingRows) {
+  const mD=byDate(meta,'meta'), gD=byDate(google,'google');
+  const sheetDates=Object.keys(sheetMap).sort().reverse();
+  const allDates=[...new Set([...mD.map(r=>r.date),...gD.map(r=>r.date),...sheetDates])].sort().reverse();
+  const mMap=Object.fromEntries(mD.map(r=>[r.date,r])), gMap=Object.fromEntries(gD.map(r=>[r.date,r]));
+  const from=S.from, to=S.to, fd=allDates.filter(d=>d>=from&&d<=to);
+
+  // Overall
+  document.getElementById('dth-overall').innerHTML=`<tr><th>Date</th><th>M Spend</th><th>G Spend</th><th>B Spend</th><th>Aff Spend</th><th>Total Spend</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>CAC</th><th>AOV</th><th>ROAS</th></tr>`;
+  // Build Bing map by date from Windsor rows
+  const bingByDate={};
+  bingRows.forEach(r=>{ if(!bingByDate[r.date])bingByDate[r.date]={spend:0,impressions:0,conversions_qualified:0,revenue:0,clicks:0}; const d=bingByDate[r.date]; d.spend+=safe(r.spend); d.impressions+=safe(r.impressions); d.conversions_qualified+=safe(r.conversions_qualified); d.revenue+=safe(r.revenue); d.clicks+=safe(r.clicks); });
+  const ob=document.getElementById('dtb-overall'); ob.innerHTML='';
+  fd.forEach(d=>{
+    const m=mMap[d]||{spend:0,clicks:0,actions_omni_purchase:0,action_values_omni_purchase:0};
+    const g=gMap[d]||{spend:0,clicks:0,conversions:0,conversions_value:0};
+    const sh=sheetMap[d]||null;
+    const bW=bingByDate[d]||{spend:0,conversions_qualified:0,revenue:0};
+    const bS=bW.spend, aS=sh?sh.affiliate.spend:0;
+    const ts=m.spend+g.spend+bS+aS;
+    const tp=safe(m.actions_omni_purchase)+safe(g.conversions)+bW.conversions_qualified+(sh?sh.affiliate.orders:0);
+    const tr_=safe(m.action_values_omni_purchase)+safe(g.conversions_value)+bW.revenue+(sh?sh.affiliate.revenue:0);
+    const tc=safe(m.clicks)+safe(g.clicks);
+    const dl=CONFIG.CONV_OVERRIDES[d]!==undefined?`${fmtDate(d)} <span style="color:#e08a00;font-size:9px;" title="Google conv. corrected">✱</span>`:fmtDate(d);
+    ob.insertAdjacentHTML('beforeend',`<tr>
+      <td>${dl}</td><td>${rs(m.spend)}</td><td>${rs(g.spend)}</td><td>${rs(bS)}</td><td>${rs(aS)}</td>
+      <td><b>${rs(ts)}</b></td><td>${num(tp,1)}</td><td>${rs(tr_)}</td>
+      <td>${pct(tc>0&&tp>0?tp/tc:0)}</td><td class="${cpaClass(tp>0?ts/tp:0)}">${rs(tp>0?ts/tp:0)}</td>
+      <td>${rs(tp>0?tr_/tp:0)}</td><td class="${roasClass(ts>0&&tr_>0?tr_/ts:0)}">${roas(ts>0&&tr_>0?tr_/ts:0)}</td>
+    </tr>`);
+  });
+
+  // Meta
+  document.getElementById('dth-meta').innerHTML=`<tr><th>Date</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr>`;
+  const mb=document.getElementById('dtb-meta'); mb.innerHTML='';
+  mD.filter(r=>r.date>=from&&r.date<=to).slice().reverse().forEach(r=>{
+    const x=calcMetrics([r],'meta');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${fmtDate(r.date)}</td><td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.atc,0)}</td><td>${num(x.chk,0)}</td><td>${num(x.purch,1)}</td>
+      <td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td><td>${rs(x.aov)}</td>
+      <td class="${cpaClass(x.cac)}">${rs(x.cac)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+
+  // Google
+  document.getElementById('dth-google').innerHTML=`<tr><th>Date</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr>`;
+  const gb=document.getElementById('dtb-google'); gb.innerHTML='';
+  gD.filter(r=>r.date>=from&&r.date<=to).slice().reverse().forEach(r=>{
+    const x=calcMetrics([r],'google');
+    const dl=CONFIG.CONV_OVERRIDES[r.date]!==undefined?`${fmtDate(r.date)} <span style="color:#e08a00;font-size:9px;">✱</span>`:fmtDate(r.date);
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${dl}</td><td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.conv,1)}</td><td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td>
+      <td>${rs(x.aov)}</td><td class="${cpaClass(x.cpa)}">${rs(x.cpa)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+
+  // Bing (Windsor live data)
+  document.getElementById('dth-bing').innerHTML=`<tr><th>Date</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Orders</th><th>Revenue</th><th>ROAS</th><th>AOV</th><th>Conv. Rate</th><th>CAC</th></tr>`;
+  const bb=document.getElementById('dtb-bing'); bb.innerHTML='';
+  Object.entries(bingByDate).filter(([d])=>d>=from&&d<=to).sort((a,b)=>b[0]>a[0]?1:-1).forEach(([d,b])=>{
+    const bR=b.spend>0&&b.revenue>0?b.revenue/b.spend:0;
+    const bA=b.conversions_qualified>0?b.revenue/b.conversions_qualified:0;
+    const bCvr=b.clicks>0&&b.conversions_qualified>0?b.conversions_qualified/b.clicks:0;
+    const bCac=b.conversions_qualified>0?b.spend/b.conversions_qualified:0;
+    const bCpm=b.impressions>0?b.spend/b.impressions*1000:0;
+    const bCtr=b.impressions>0?b.clicks/b.impressions:0;
+    const bCpc=b.clicks>0?b.spend/b.clicks:0;
+    bb.insertAdjacentHTML('beforeend',`<tr>
+      <td>${fmtDate(d)}</td><td>${rs(b.spend)}</td><td>${num(b.impressions||0)}</td><td>${num(b.clicks)}</td>
+      <td>${rs(bCpm)}</td><td class="${ctrClass(bCtr)}">${pct(bCtr)}</td><td>${rs(bCpc)}</td>
+      <td>${num(b.conversions_qualified,1)}</td><td>${rs(b.revenue)}</td>
+      <td class="${roasClass(bR)}">${roas(bR)}</td><td>${rs(bA)}</td><td>${pct(bCvr)}</td><td>${rs(bCac)}</td>
+    </tr>`);
+  });
+
+  // Affiliate
+  document.getElementById('dth-affiliate').innerHTML=`<tr><th>Date</th><th>Spend</th><th>Orders</th><th>Revenue</th><th>ROAS</th><th>AOV</th></tr>`;
+  const ab=document.getElementById('dtb-affiliate'); ab.innerHTML='';
+  sheetDates.filter(d=>d>=from&&d<=to).forEach(d=>{
+    const a=sheetMap[d].affiliate, aR=a.spend>0&&a.revenue>0?a.revenue/a.spend:0, aA=a.orders>0?a.revenue/a.orders:0;
+    ab.insertAdjacentHTML('beforeend',`<tr>
+      <td>${fmtDate(d)}</td><td>${rs(a.spend)}</td><td>${num(a.orders,0)}</td><td>${rs(a.revenue)}</td>
+      <td class="${roasClass(aR)}">${roas(aR)}</td><td>${rs(aA)}</td>
+    </tr>`);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — WEEKLY TABLE
+// ═══════════════════════════════════════════════════════════
+function renderWeekly(meta, google) {
+  const mW=byWeek(meta,'meta'), gW=byWeek(google,'google');
+  const allWeeks=[...new Set([...mW.map(r=>r.week),...gW.map(r=>r.week)])].sort();
+  const mMap=Object.fromEntries(mW.map(r=>[r.week,r])), gMap=Object.fromEntries(gW.map(r=>[r.week,r]));
+  if(!allWeeks.length){ ['overall','meta','google'].forEach(t=>{document.getElementById('wtb-'+t).innerHTML='<tr><td colspan="16" class="empty">Not enough data.</td></tr>';}); return; }
+
+  // Overall
+  document.getElementById('wth-overall').innerHTML=`<tr><th>Week</th><th>M Spend</th><th>G Spend</th><th>Total Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>CAC</th><th>ROAS</th><th>AOV</th></tr>`;
+  const ob=document.getElementById('wtb-overall'); ob.innerHTML='';
+  allWeeks.forEach(wk=>{
+    const m=mMap[wk]||{spend:0,impressions:0,clicks:0,actions_omni_add_to_cart:0,actions_omni_purchase:0,action_values_omni_purchase:0};
+    const g=gMap[wk]||{spend:0,impressions:0,clicks:0,conversions:0,conversions_value:0};
+    const ts=m.spend+g.spend, ti=m.impressions+g.impressions, tc=m.clicks+g.clicks;
+    const tp=m.actions_omni_purchase+g.conversions, tr_=m.action_values_omni_purchase+g.conversions_value;
+    const tcpm=ti>0?ts/ti*1000:0, tctr=ti>0?tc/ti:0, tcpc=tc>0?ts/tc:0;
+    const tcvr=tc>0&&tp>0?tp/tc:0, tcac=tp>0?ts/tp:0, troas=ts>0&&tr_>0?tr_/ts:0, taov=tp>0?tr_/tp:0;
+    ob.insertAdjacentHTML('beforeend',`<tr>
+      <td><b>${wk}</b></td><td>${rs(m.spend)}</td><td>${rs(g.spend)}</td><td><b>${rs(ts)}</b></td>
+      <td>${num(ti)}</td><td>${num(tc)}</td><td>${rs(tcpm)}</td>
+      <td class="${ctrClass(tctr)}">${pct(tctr)}</td><td>${rs(tcpc)}</td>
+      <td>${num(m.actions_omni_add_to_cart,0)}</td><td>${num(tp,1)}</td><td>${rs(tr_)}</td>
+      <td>${pct(tcvr)}</td><td class="${cpaClass(tcac)}">${rs(tcac)}</td>
+      <td class="${roasClass(troas)}">${roas(troas)}</td><td>${rs(taov)}</td>
+    </tr>`);
+  });
+
+  // Meta weekly
+  document.getElementById('wth-meta').innerHTML=`<tr><th>Week</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Add to Cart</th><th>Checkout</th><th>Purchases</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr>`;
+  const mb=document.getElementById('wtb-meta'); mb.innerHTML='';
+  mW.forEach(r=>{
+    const x=calcMetrics([{...r}],'meta');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td><b>${r.week}</b></td><td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.atc,0)}</td><td>${num(x.chk,0)}</td><td>${num(x.purch,1)}</td>
+      <td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td><td>${rs(x.aov)}</td>
+      <td class="${cpaClass(x.cac)}">${rs(x.cac)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+
+  // Google weekly
+  document.getElementById('wth-google').innerHTML=`<tr><th>Week</th><th>Spend</th><th>Imps</th><th>Clicks</th><th>CPM</th><th>CTR</th><th>CPC</th><th>Conversions</th><th>Revenue</th><th>CVR</th><th>AOV</th><th>CAC</th><th>ROAS</th></tr>`;
+  const gb=document.getElementById('wtb-google'); gb.innerHTML='';
+  gW.forEach(r=>{
+    const x=calcMetrics([{...r}],'google');
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td><b>${r.week}</b></td><td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.conv,1)}</td><td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td>
+      <td>${rs(x.aov)}</td><td class="${cpaClass(x.cpa)}">${rs(x.cpa)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — CAMPAIGNS
+// ═══════════════════════════════════════════════════════════
+function renderCampaigns(meta, google, bingRows) {
+  const mb=document.getElementById('ctb-meta'); mb.innerHTML='';
+  byCampaign(meta,'meta').forEach(r=>{
+    const x=calcMetrics([r],'meta'), n=r.campaign_name.replace(/^\d+_Cheil_Kohler_D2C_/,'').replace(/_/g,' ');
+    mb.insertAdjacentHTML('beforeend',`<tr>
+      <td title="${r.campaign_name}">${metaTypeBadge(r.campaign_name)}${n}</td>
+      <td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.atc,0)}</td><td>${num(x.chk,0)}</td><td>${num(x.purch,1)}</td>
+      <td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td><td>${rs(x.aov)}</td>
+      <td class="${cpaClass(x.cac)}">${rs(x.cac)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+  const gb=document.getElementById('ctb-google'); gb.innerHTML='';
+  byCampaign(google,'google').forEach(r=>{
+    const x=calcMetrics([r],'google'), n=r.campaign_name.replace(/^\d+_Cheil_Kohler_/,'').replace(/_/g,' ');
+    gb.insertAdjacentHTML('beforeend',`<tr>
+      <td title="${r.campaign_name}">${googleTypeBadge(r.campaign_name)}${n}</td>
+      <td>${rs(x.spend)}</td><td>${num(x.imps)}</td><td>${num(x.clicks)}</td>
+      <td>${rs(x.cpm)}</td><td class="${ctrClass(x.ctr)}">${pct(x.ctr)}</td><td>${rs(x.cpc)}</td>
+      <td>${num(x.conv,1)}</td><td>${rs(x.rev)}</td><td>${pct(x.cvr)}</td>
+      <td>${rs(x.aov)}</td><td class="${cpaClass(x.cpa)}">${rs(x.cpa)}</td><td class="${roasClass(x.roas)}">${roas(x.roas)}</td>
+    </tr>`);
+  });
+  // Bing campaigns (Windsor live data)
+  const bingCamp={}; 
+  bingRows.forEach(r=>{
+    const k=r.campaign||'(unknown)';
+    if(!bingCamp[k])bingCamp[k]={campaign_name:k,spend:0,impressions:0,clicks:0,conversions_qualified:0,revenue:0};
+    const d=bingCamp[k]; d.spend+=safe(r.spend); d.impressions+=safe(r.impressions);
+    d.clicks+=safe(r.clicks); d.conversions_qualified+=safe(r.conversions_qualified); d.revenue+=safe(r.revenue);
+  });
+  const bb=document.getElementById('ctb-bing'); bb.innerHTML='';
+  Object.values(bingCamp).sort((a,b)=>b.spend-a.spend).forEach(r=>{
+    const bR=r.spend>0&&r.revenue>0?r.revenue/r.spend:0;
+    const bA=r.conversions_qualified>0?r.revenue/r.conversions_qualified:0;
+    const bCvr=r.clicks>0&&r.conversions_qualified>0?r.conversions_qualified/r.clicks:0;
+    const bCac=r.conversions_qualified>0?r.spend/r.conversions_qualified:0;
+    const bCpm=r.impressions>0?r.spend/r.impressions*1000:0;
+    const bCtr=r.impressions>0?r.clicks/r.impressions:0;
+    const bCpc=r.clicks>0?r.spend/r.clicks:0;
+    bb.insertAdjacentHTML('beforeend',`<tr>
+      <td title="${r.campaign_name}">${r.campaign_name}</td>
+      <td>${rs(r.spend)}</td><td>${num(r.impressions)}</td><td>${num(r.clicks)}</td>
+      <td>${rs(bCpm)}</td><td class="${ctrClass(bCtr)}">${pct(bCtr)}</td><td>${rs(bCpc)}</td>
+      <td>${num(r.conversions_qualified,1)}</td><td>${rs(r.revenue)}</td>
+      <td class="${roasClass(bR)}">${roas(bR)}</td><td>${rs(bA)}</td>
+      <td>${pct(bCvr)}</td><td class="${cpaClass(bCac)}">${rs(bCac)}</td>
+    </tr>`);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — SALE EVENTS (independent fetch, month-aware)
+// ═══════════════════════════════════════════════════════════
+const SALE_CALENDAR = {
+  mega: {
+    '2026-01': { from:'2026-01-24', to:'2026-01-31', days:8  },
+    '2026-02': null,
+    '2026-03': { from:'2026-03-09', to:'2026-03-19', days:11 },
+    '2026-04': null,
+    '2026-06': { from:'2026-06-06', to:'2026-06-15', days:10 },
+  },
+  mini: {
+    '2026-01': null,
+    '2026-02': { from:'2026-02-17', to:'2026-02-21', days:5 },
+    '2026-03': null,
+    '2026-04': { from:'2026-04-10', to:'2026-04-14', days:5 },
+    '2026-06': { from:'2026-06-16', to:'2026-06-20', days:5 },
+  },
+};
+const MONTH_LABELS = { '2026-01':'Jan 2026','2026-02':'Feb 2026','2026-03':'Mar 2026','2026-04':'Apr 2026','2026-06':'Jun 2026' };
+let selectedSaleMonth = '2026-06';
+const SD_CACHE = {};       // fully resolved data, keyed by month
+const FETCH_PROMISES = {}; // in-flight promises, prevents duplicate fetches
+let SHEET_CACHE = null;    // sheet data fetched once, shared across all months
+
+// Fetch sheets once — they cover all months already
+async function ensureSheetCache() {
+  if(SHEET_CACHE) return SHEET_CACHE;
+  if(!FETCH_PROMISES['__sheets']) {
+    FETCH_PROMISES['__sheets'] = (async () => {
+      const affRows = await windsorFetch({ connector:'googlesheets', accounts:CONFIG.SHEET_ACCOUNTS, fields:SHEET_FIELDS_AFF });
+      SHEET_CACHE = parseSheetRows(affRows);
+      return SHEET_CACHE;
+    })();
+  }
+  return FETCH_PROMISES['__sheets'];
+}
+
+// Fetch Meta+Google for one month (cached; no-op if no sale that month)
+async function fetchSaleMonth(month) {
+  if(SD_CACHE[month] !== undefined) return SD_CACHE[month];
+  if(FETCH_PROMISES[month]) return FETCH_PROMISES[month];
+  const megaEv = SALE_CALENDAR.mega[month], miniEv = SALE_CALENDAR.mini[month];
+  const allEvs = [megaEv, miniEv].filter(Boolean);
+  if(!allEvs.length) { SD_CACHE[month] = null; return null; }
+  const fetchFrom = allEvs.map(e=>e.from).sort()[0];
+  const fetchTo   = allEvs.map(e=>e.to).sort().reverse()[0];
+  FETCH_PROMISES[month] = (async () => {
+    const [sheet, metaAll, googAll] = await Promise.all([
+      ensureSheetCache(),
+      windsorFetch({ connector:'facebook', accounts:[CONFIG.META_ACCOUNT], date_from:fetchFrom, date_to:fetchTo,
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','cpm','reach','frequency',
+          'actions_omni_add_to_cart','actions_omni_initiated_checkout','actions_omni_purchase','action_values_omni_purchase'] }),
+      windsorFetch({ connector:'google_ads', accounts:[CONFIG.GOOGLE_ADS_ACCOUNT], date_from:fetchFrom, date_to:fetchTo,
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','average_cpm',
+          'conversions','conversions_value','conversion_rate','value_per_conversion','cost_per_conversion'] }),
+    ]);
+    SD_CACHE[month] = {
+      meta:   applyConversionOverrides(metaAll.filter(r=>/D2C/i.test(r.campaign_name))),
+      google: applyConversionOverrides(googAll.filter(r=>!/Branding|DemandGen|Demandgen/i.test(r.campaign_name))),
+      sheet,
+    };
+    return SD_CACHE[month];
+  })();
+  return FETCH_PROMISES[month];
+}
+
+// Kick off all months in parallel — called when tab first opens
+function prefetchAllSaleMonths() {
+  Object.keys(MONTH_LABELS).forEach(m => fetchSaleMonth(m).catch(()=>{}));
+}
+
+let saleLoading = false;
+
+function setSaleMonth(month, btn) {
+  document.querySelectorAll('.smpill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedSaleMonth = month;
+  renderSaleEvents();
+}
+
+async function renderSaleEvents() {
+  const month = selectedSaleMonth;
+  const noData = document.getElementById('sale-no-data');
+  const grid   = document.getElementById('sale-events-grid');
+
+  // If already cached, render immediately
+  if(SD_CACHE[month] !== undefined) {
+    noData.classList.add('hidden');
+    grid.style.opacity = '1';
+  } else {
+    noData.classList.remove('hidden');
+    noData.innerHTML = `⏳ Loading ${MONTH_LABELS[month]} sale data…`;
+    grid.style.opacity = '0.3';
+    try { await fetchSaleMonth(month); }
+    catch(e) { noData.innerHTML = `⚠️ Failed: ${e.message}`; return; }
+    if(selectedSaleMonth !== month) return; // user switched while loading
+    noData.classList.add('hidden');
+    grid.style.opacity = '1';
+  }
+
+  const SD = SD_CACHE[month];
+  const megaEv = SALE_CALENDAR.mega[month];
+  const miniEv = SALE_CALENDAR.mini[month];
+
+  const localIso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const fmtEvDate = s => { const d=new Date(s+'T12:00:00'); return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); };
+
+  [{ id:'mega', ev:megaEv }, { id:'mini', ev:miniEv }].forEach(({ id, ev }) => {
+    const nosale = document.getElementById(`${id}-nosale`);
+    const body   = document.getElementById(`${id}-body`);
+    if(!ev) {
+      document.getElementById(`${id}-dates`).textContent = 'No sale this month';
+      body.classList.add('hidden');
+      nosale.classList.remove('hidden');
+      return;
+    }
+    body.classList.remove('hidden');
+    nosale.classList.add('hidden');
+    document.getElementById(`${id}-dates`).textContent = `${fmtEvDate(ev.from)} – ${fmtEvDate(ev.to)}, ${ev.from.slice(0,4)} · ${ev.days} days`;
+
+    const meta   = SD.meta.filter(r=>r.date>=ev.from&&r.date<=ev.to);
+    const google = SD.google.filter(r=>r.date>=ev.from&&r.date<=ev.to);
+    const shAgg  = aggregateSheet(SD.sheet, ev.from, ev.to);
+    const m = calcMetrics(meta,   'meta');
+    const g = calcMetrics(google, 'google');
+    const b = shAgg.bing;
+    const a = shAgg.affiliate;
+
+    const ts = m.spend + g.spend + b.spend + a.spend;
+    const tr = (m.rev||0) + (g.rev||0) + b.revenue + a.revenue;
+    const tp = (m.purch||0) + (g.conv||0) + b.orders + a.orders;
+    const totalRoas = ts>0&&tr>0 ? tr/ts : 0;
+    const totalCac  = tp>0       ? ts/tp  : 0;
+    const totalAov  = tp>0       ? tr/tp  : 0;
+
+    document.getElementById(`${id}-kpis`).innerHTML = `
+      <div class="sale-kpi"><div class="kl">Total Spend</div><div class="kv">${rs(ts)}</div></div>
+      <div class="sale-kpi"><div class="kl">Revenue</div><div class="kv">${rs(tr)}</div></div>
+      <div class="sale-kpi"><div class="kl">ROAS</div><div class="kv">${roas(totalRoas)}</div></div>
+      <div class="sale-kpi"><div class="kl">Orders</div><div class="kv">${num(tp,0)}</div></div>
+      <div class="sale-kpi"><div class="kl">CAC</div><div class="kv">${totalCac>0?rs(totalCac):'—'}</div></div>
+      <div class="sale-kpi"><div class="kl">AOV</div><div class="kv">${totalAov>0?rs(totalAov):'—'}</div></div>
+    `;
+
+    const mCac=(m.purch||0)>0?m.spend/m.purch:0, gCac=(g.conv||0)>0?g.spend/g.conv:0;
+    const bCac=b.orders>0?b.spend/b.orders:0, aCac=a.orders>0?a.spend/a.orders:0;
+    const d=ev.days;
+    const pRows=[
+      { lbl:'<span style="color:#1877F2">●</span> Meta',      sp:m.spend, rev:m.rev||0,  ro:m.roas||0, ord:m.purch||0, cac:mCac, aov:m.aov||0 },
+      { lbl:'<span style="color:#34A853">●</span> Google',    sp:g.spend, rev:g.rev||0,  ro:g.roas||0, ord:g.conv||0,  cac:gCac, aov:g.aov||0 },
+      { lbl:'<span style="color:#D4A017">●</span> Bing',      sp:b.spend, rev:b.revenue, ro:b.roas||0, ord:b.orders,   cac:bCac, aov:b.orders>0?b.revenue/b.orders:0 },
+      { lbl:'<span style="color:#7B5EA7">●</span> Affiliate', sp:a.spend, rev:a.revenue, ro:a.spend>0&&a.revenue>0?a.revenue/a.spend:0, ord:a.orders, cac:aCac, aov:a.orders>0?a.revenue/a.orders:0 },
+    ];
+    document.getElementById(`${id}-tbody`).innerHTML = pRows.map(r=>`
+      <tr>
+        <td>${r.lbl}</td><td>${rs(r.sp)}</td><td>${rs(r.rev)}</td>
+        <td class="${roasClass(r.ro)}">${roas(r.ro)}</td>
+        <td>${r.ord>0?num(r.ord,0):'—'}</td>
+        <td class="${r.cac>0?cpaClass(r.cac):''}">${r.cac>0?rs(r.cac):'—'}</td>
+        <td>${r.aov>0?rs(r.aov):'—'}</td>
+        <td style="color:#888">${rs(r.sp/d)}</td>
+        <td style="color:#888">${r.rev>0?rs(r.rev/d):'—'}</td>
+      </tr>`).join('')+
+      `<tr class="total-row">
+        <td>Total</td><td>${rs(ts)}</td><td>${rs(tr)}</td>
+        <td class="${roasClass(totalRoas)}">${roas(totalRoas)}</td>
+        <td>${tp>0?num(tp,0):'—'}</td>
+        <td class="${totalCac>0?cpaClass(totalCac):''}">${totalCac>0?rs(totalCac):'—'}</td>
+        <td>${totalAov>0?rs(totalAov):'—'}</td>
+        <td style="color:#888">${rs(ts/d)}</td>
+        <td style="color:#888">${tr>0?rs(tr/d):'—'}</td>
+      </tr>`;
+
+    // Day on Day
+    const mByDate=Object.fromEntries(meta.map(r=>[r.date,r]));
+    const gByDate=Object.fromEntries(Object.values(google.reduce((acc,r)=>{
+      if(!acc[r.date])acc[r.date]={date:r.date,spend:0,conversions:0,conversions_value:0,clicks:0};
+      acc[r.date].spend+=+r.spend||0; acc[r.date].conversions+=+r.conversions||0;
+      acc[r.date].conversions_value+=+r.conversions_value||0; acc[r.date].clicks+=+r.clicks||0;
+      return acc;
+    },{})).map(r=>[r.date,r]));
+    const evDates=[];
+    let cur=new Date(ev.from+'T12:00:00');
+    const end=new Date(ev.to+'T12:00:00');
+    while(cur<=end){ evDates.push(localIso(cur)); cur.setDate(cur.getDate()+1); }
+
+    document.getElementById(`${id}-dod-tbody`).innerHTML = evDates.map(date=>{
+      const mr=mByDate[date], gr=gByDate[date], sh=SD.sheet[date];
+      const mM=mr?calcMetrics([mr],'meta'):{spend:0,purch:0,rev:0};
+      const gM=gr?calcMetrics([gr],'google'):{spend:0,conv:0,rev:0};
+      const bS=sh?sh.bing.spend:0, bR=sh?sh.bing.revenue:0, bO=sh?sh.bing.orders:0;
+      const aS=sh?sh.affiliate.spend:0, aR=sh?sh.affiliate.revenue:0, aO=sh?sh.affiliate.orders:0;
+      const daySpend=(mM.spend||0)+(gM.spend||0)+bS+aS;
+      const dayRev=(mM.rev||0)+(gM.rev||0)+bR+aR;
+      const dayOrd=(mM.purch||0)+(gM.conv||0)+bO+aO;
+      const dayRoas=daySpend>0&&dayRev>0?dayRev/daySpend:0;
+      const dayCac=dayOrd>0?daySpend/dayOrd:0;
+      const dayAov=dayOrd>0?dayRev/dayOrd:0;
+      return `<tr>
+        <td style="font-weight:600">${fmtDate(date)}</td>
+        <td>${mM.spend>0?rs(mM.spend):'—'}</td><td>${gM.spend>0?rs(gM.spend):'—'}</td>
+        <td>${bS>0?rs(bS):'—'}</td><td>${aS>0?rs(aS):'—'}</td>
+        <td style="font-weight:700">${daySpend>0?rs(daySpend):'—'}</td>
+        <td>${dayRev>0?rs(dayRev):'—'}</td>
+        <td class="${roasClass(dayRoas)}">${dayRoas>0?roas(dayRoas):'—'}</td>
+        <td>${dayOrd>0?num(dayOrd,0):'—'}</td>
+        <td class="${dayCac>0?cpaClass(dayCac):''}">${dayCac>0?rs(dayCac):'—'}</td>
+        <td>${dayAov>0?rs(dayAov):'—'}</td>
+      </tr>`;
+    }).join('');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// DEBUG HELPER — run window.debugSheet('2026-04') in console
+// ═══════════════════════════════════════════════════════════
+window.debugSheet = async function(month) {
+  // Works out which account ID corresponds to the month
+  const monthMap = {
+    '2026-01': CONFIG.SHEET_ACCOUNTS[0],
+    '2026-02': CONFIG.SHEET_ACCOUNTS[1],
+    '2026-03': CONFIG.SHEET_ACCOUNTS[2],
+    '2026-04': CONFIG.SHEET_ACCOUNTS[3],
+    '2026-05': CONFIG.SHEET_ACCOUNTS[4],
+    '2026-06': CONFIG.SHEET_ACCOUNTS[5],
+  };
+  const acct = monthMap[month];
+  if(!acct){ console.error('Unknown month:', month); return; }
+  console.log(`Fetching raw Bing fields for ${month} (account: ${acct})…`);
+
+  // Fetch all positional fields Windsor might expose for this tab
+  const allFields = ['month','bing_(d2c)',
+    '_1','_2','_3','_4','_5','_6','_7','_8','_9','_10',
+    '_11','_12','_13','_14','_15','_16','_17','_18','_19','_20',
+    '_21','_22','_23','_24','_25','_26','_27','_28','_29','_30',
+    '_31','_32','_33','_34','_35','_36','_37','_38','_39','_40',
+    '_41','_42','_43','_44','_45','affiliate'
+  ];
+  const params = new URLSearchParams({ api_key: CONFIG.WINDSOR_API_KEY, fields: allFields.join(',') });
+  params.append('account_id', acct);
+  const url = `${CONFIG.WINDSOR_API_BASE}/googlesheets?${params.toString()}`;
+  const resp = await fetch(url);
+  const json = await resp.json();
+  const rows = Array.isArray(json) ? json : (json.data || json.result || []);
+
+  // Filter to just the sale period for the selected month
+  const salePeriods = {
+    '2026-01': ['2026-01-24','2026-01-31'],
+    '2026-02': ['2026-02-17','2026-02-21'],
+    '2026-03': ['2026-03-09','2026-03-19'],
+    '2026-04': ['2026-04-10','2026-04-14'],
+    '2026-06': ['2026-06-06','2026-06-20'],
+  };
+  const [from, to] = salePeriods[month] || ['',''];
+  const relevant = rows.filter(r => {
+    const d = r.month ? String(r.month).match(/^(\d{1,2})\/(\d{2})\/(\d{4})$/) : null;
+    if(!d) return false;
+    const iso = `${d[3]}-${d[2].padStart(2,'0')}-${d[1].padStart(2,'0')}`;
+    return iso >= from && iso <= to;
+  });
+
+  console.log(`\n=== RAW SHEET DATA FOR ${month} SALE PERIOD (${from} – ${to}) ===`);
+  console.log(`Total rows returned: ${rows.length}, rows in sale period: ${relevant.length}`);
+  if(relevant.length > 0) {
+    console.log('\nSample row (first sale date):');
+    console.table([relevant[0]]);
+    console.log('\nKey fields to check:');
+    const r = relevant[0];
+    console.log('  bing_(d2c) (spend):', r['bing_(d2c)']);
+    console.log('  _24 (Bing orders?):', r['_24']);
+    console.log('  _25 (Bing revenue?):', r['_25']);
+    console.log('  _26 (Bing AOV?):', r['_26']);
+    console.log('  _28 (Bing ROAS?):', r['_28']);
+    console.log('  _29 (Bing CAC?):', r['_29']);
+    console.log('  _30 (Bing clicks?):', r['_30']);
+    console.log('\nAll non-null fields:');
+    const nonNull = Object.entries(r).filter(([k,v])=>v!=null&&v!==''&&v!=='-'&&v!==0);
+    nonNull.forEach(([k,v])=>console.log(`  ${k}: ${v}`));
+  } else {
+    console.warn('No rows found in sale period — check date parsing or account ID');
+    console.log('First 3 raw rows:', rows.slice(0,3));
+  }
+  return relevant;
+};
+console.log('Debug tool ready. Run: debugSheet("2026-04")');
+
+// ═══════════════════════════════════════════════════════════
+// INSIGHTS ENGINE
+// ═══════════════════════════════════════════════════════════
+function insHtml(type, tag, title, body, action) {
+  return `<div class="ins ${type}"><span class="ins-tag">${tag}</span><div class="ins-title">${title}</div><div class="ins-body">${body}</div>${action?`<div class="ins-action">→ ${action}</div>`:''}</div>`;
+}
+
+function renderInsights(containerId, cards) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!cards || !cards.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="insights-block"><div class="insights-hdr">Insights & Actions</div><div class="insights-grid">${cards.join('')}</div></div>`;
+}
+
+function buildOverviewInsights(meta, google, sheetAgg) {
+  const cards = [];
+  const mx = calcMetrics(meta, 'meta');
+  const gx = calcMetrics(google, 'google');
+  const bing = sheetAgg.bing;
+  const aff = sheetAgg.affiliate;
+
+  const totalSpend = mx.spend + gx.spend + (bing.spend||0) + (aff.spend||0);
+  const totalRev   = mx.rev + gx.rev + (bing.revenue||0) + (aff.revenue||0);
+  const totalConv  = mx.purch + gx.conv + (bing.orders||0) + (aff.orders||0);
+  const blendRoas  = totalSpend > 0 ? totalRev / totalSpend : 0;
+  const blendCac   = totalConv > 0 ? totalSpend / totalConv : 0;
+  const blendAov   = totalConv > 0 ? totalRev / totalConv : 0;
+
+  // 1. Blended ROAS health
+  if (blendRoas > 0) {
+    if (blendRoas >= 4) {
+      cards.push(insHtml('signal','Signal','Blended ROAS Strong',
+        `All-platform ROAS is <b>${blendRoas.toFixed(2)}x</b> on ₹${_ind(Math.round(totalSpend))} spend. Funnel is healthy.`,
+        'Test 10–15% budget increase on the best-performing platform to capture scale.'));
+    } else if (blendRoas >= 2.5) {
+      cards.push(insHtml('watch','Watch','Blended ROAS Below Target',
+        `ROAS is <b>${blendRoas.toFixed(2)}x</b>. Revenue is ₹${rs(totalRev).replace('₹','')} on ₹${_ind(Math.round(totalSpend))} spend. Improving CVR or AOV by 10% gets you to 3x+.`,
+        'Audit landing pages for the top-spend campaigns. Check checkout drop-off.'));
+    } else {
+      cards.push(insHtml('action','Action Needed','ROAS Under 2.5x — Review Urgently',
+        `Blended ROAS is <b>${blendRoas.toFixed(2)}x</b>. Every ₹1 spent returns ₹${blendRoas.toFixed(2)}. This is below cost-recovery for most D2C models.`,
+        'Pause the lowest ROAS campaigns immediately. Redirect budget to proven converters.'));
+    }
+  }
+
+  // 2. Platform ROAS gap
+  const platformRoas = [
+    { name:'Meta', roas:mx.roas, spend:mx.spend },
+    { name:'Google', roas:gx.roas, spend:gx.spend },
+    { name:'Bing', roas:bing.roas||0, spend:bing.spend||0 },
+  ].filter(p => p.spend > 0);
+  if (platformRoas.length >= 2) {
+    const best  = platformRoas.reduce((a,b) => a.roas > b.roas ? a : b);
+    const worst = platformRoas.reduce((a,b) => a.roas < b.roas ? a : b);
+    if (best.roas > worst.roas * 1.5 && worst.spend > 0) {
+      const gap = ((best.roas - worst.roas) / worst.roas * 100).toFixed(0);
+      cards.push(insHtml('opp','Opportunity','Platform Efficiency Gap',
+        `<b>${best.name}</b> is delivering <b>${best.roas.toFixed(2)}x</b> ROAS vs <b>${worst.name}</b> at <b>${worst.roas.toFixed(2)}x</b> — a <b>${gap}%</b> gap.`,
+        `Shift 15–20% of ${worst.name} budget to ${best.name} and monitor CAC over the next 7 days.`));
+    }
+  }
+
+  // 3. CAC vs AOV sustainability
+  if (blendCac > 0 && blendAov > 0) {
+    const margin = blendAov - blendCac;
+    if (blendCac > blendAov * 0.4) {
+      cards.push(insHtml('action','Action Needed','CAC Eating Into Margin',
+        `CAC is <b>₹${_ind(Math.round(blendCac))}</b> against AOV of <b>₹${_ind(Math.round(blendAov))}</b>. Acquisition cost is ${((blendCac/blendAov)*100).toFixed(0)}% of order value — leaves thin margin.`,
+        'Either negotiate higher AOV (bundles, upsells) or cut CAC via better targeting and creative refresh.'));
+    } else if (blendCac < blendAov * 0.2) {
+      cards.push(insHtml('signal','Signal','CAC Efficient',
+        `CAC of <b>₹${_ind(Math.round(blendCac))}</b> is well within AOV of <b>₹${_ind(Math.round(blendAov))}</b>. Headroom exists to scale.`,
+        'Increase daily budgets 15% and track if CAC holds — you have room.'));
+    } else {
+      cards.push(insHtml('watch','Watch','CAC-AOV Ratio Healthy But Watch LTV',
+        `CAC <b>₹${_ind(Math.round(blendCac))}</b> vs AOV <b>₹${_ind(Math.round(blendAov))}</b>. ${((blendCac/blendAov)*100).toFixed(0)}% of order value going to acquisition.`,
+        'Track repeat purchase rate. If LTV/CAC < 3, investigate retention.'));
+    }
+  }
+
+  // 4. Meta CVR signal
+  if (mx.clicks > 100 && mx.cvr > 0) {
+    if (mx.cvr < 0.005) {
+      cards.push(insHtml('action','Action Needed','Meta CVR Critical — Under 0.5%',
+        `Meta CVR is <b>${(mx.cvr*100).toFixed(2)}%</b> from ${_ind(Math.round(mx.clicks))} clicks. Traffic is not converting.`,
+        'Check landing page relevance to ad creative. Run A/B test on the top-spend ad sets\' destination pages.'));
+    } else if (mx.cvr >= 0.01) {
+      cards.push(insHtml('signal','Signal','Meta CVR Strong',
+        `Meta converting at <b>${(mx.cvr*100).toFixed(2)}%</b> — above 1% threshold for D2C.`,
+        'Protect this by avoiding drastic creative changes mid-flight. Scale spend with matching creative variety.'));
+    }
+  }
+
+  // 5. Google CVR signal
+  if (gx.clicks > 50 && gx.cvr > 0) {
+    if (gx.cvr < 0.01) {
+      cards.push(insHtml('watch','Watch','Google CVR Under 1%',
+        `Google converting at <b>${(gx.cvr*100).toFixed(2)}%</b>. Search/Shopping clicks not closing.`,
+        'Review keyword match types. Check if Shopping feed prices are competitive. Audit negative keyword list.'));
+    } else if (gx.cvr >= 0.03) {
+      cards.push(insHtml('opp','Opportunity','Google CVR Above 3% — Scale Signal',
+        `Google CVR is <b>${(gx.cvr*100).toFixed(2)}%</b>. High-intent traffic is converting well.`,
+        'Raise target ROAS or CPA bid constraint by 10% to unlock more volume at this quality.'));
+    }
+  }
+
+  // 6. Revenue concentration risk
+  const revShares = [
+    { name:'Meta',      rev: mx.rev,          spend: mx.spend },
+    { name:'Google',    rev: gx.rev,          spend: gx.spend },
+    { name:'Bing',      rev: bing.revenue||0, spend: bing.spend||0 },
+    { name:'Affiliate', rev: aff.revenue||0,  spend: aff.spend||0 },
+  ].filter(p => p.rev > 0);
+  if (revShares.length >= 2 && totalRev > 0) {
+    const dominant = revShares.reduce((a,b) => a.rev > b.rev ? a : b);
+    const share = dominant.rev / totalRev;
+    if (share > 0.7) {
+      cards.push(insHtml('watch','Watch',`${dominant.name} Driving ${(share*100).toFixed(0)}% of Revenue`,
+        `Revenue is concentrated — <b>${dominant.name}</b> contributes <b>${(share*100).toFixed(0)}%</b> of total. Any disruption (policy, algo, spend cut) hits hard.`,
+        `Invest in growing at least one other platform to reduce single-channel dependency.`));
+    }
+  }
+
+  return cards;
+}
+
+function buildDailyInsights(meta, google, sheetMap, dateFrom, dateTo) {
+  const cards = [];
+  const mD = byDate(meta, 'meta');
+  const gD = byDate(google, 'google');
+
+  // Merge into combined daily array
+  const allDates = [...new Set([...mD.map(r=>r.date), ...gD.map(r=>r.date)])].sort();
+  if (allDates.length < 3) return [];
+
+  const mMap = Object.fromEntries(mD.map(r=>[r.date,r]));
+  const gMap = Object.fromEntries(gD.map(r=>[r.date,r]));
+
+  const daily = allDates.map(date => {
+    const m = mMap[date] || {};
+    const g = gMap[date] || {};
+    const spend  = safe(m.spend) + safe(g.spend);
+    const rev    = safe(m.action_values_omni_purchase) + safe(g.conversions_value);
+    const conv   = safe(m.actions_omni_purchase) + safe(g.conversions);
+    const clicks = safe(m.clicks) + safe(g.clicks);
+    const roas_  = spend > 0 && rev > 0 ? rev/spend : 0;
+    const cac_   = conv > 0 ? spend/conv : 0;
+    const cvr_   = clicks > 0 && conv > 0 ? conv/clicks : 0;
+    return { date, spend, rev, conv, clicks, roas:roas_, cac:cac_, cvr:cvr_ };
+  }).filter(d => d.spend > 0);
+
+  if (daily.length < 2) return [];
+
+  // Best and worst ROAS days
+  const sorted = [...daily].filter(d=>d.roas>0).sort((a,b)=>b.roas-a.roas);
+  if (sorted.length >= 2) {
+    const best  = sorted[0];
+    const worst = sorted[sorted.length-1];
+    cards.push(insHtml('signal','Signal',`Best ROAS: ${fmtDate(best.date)}`,
+      `<b>${fmtDate(best.date)}</b> delivered <b>${best.roas.toFixed(2)}x</b> ROAS (₹${_ind(Math.round(best.rev))} revenue on ₹${_ind(Math.round(best.spend))} spend).`,
+      'Study that day\'s creative rotation and budget allocation — use it as the benchmark.'));
+    if (worst.roas < best.roas * 0.5) {
+      cards.push(insHtml('watch','Watch',`Weakest ROAS: ${fmtDate(worst.date)}`,
+        `<b>${fmtDate(worst.date)}</b> had <b>${worst.roas.toFixed(2)}x</b> ROAS. Compared to the best day, this is a <b>${((best.roas-worst.roas)/best.roas*100).toFixed(0)}% gap</b>.`,
+        'Check if budget was over-allocated that day or if there was a creative/audience fatigue signal.'));
+    }
+  }
+
+  // Trend direction (last 3 days vs first 3 days of period)
+  if (daily.length >= 6) {
+    const first3 = daily.slice(0,3);
+    const last3  = daily.slice(-3);
+    const avgRoasFirst = first3.reduce((a,d)=>a+d.roas,0)/3;
+    const avgRoasLast  = last3.reduce((a,d)=>a+d.roas,0)/3;
+    const trendPct = avgRoasFirst > 0 ? ((avgRoasLast - avgRoasFirst) / avgRoasFirst * 100) : 0;
+    if (trendPct > 15) {
+      cards.push(insHtml('signal','Signal','ROAS Trending Up',
+        `ROAS has improved <b>+${trendPct.toFixed(0)}%</b> comparing the first 3 days to the last 3 days of this period (${avgRoasFirst.toFixed(2)}x → ${avgRoasLast.toFixed(2)}x).`,
+        'Momentum is positive. Maintain current creative and targeting — avoid disruptions.'));
+    } else if (trendPct < -15) {
+      cards.push(insHtml('action','Action Needed','ROAS Declining Over Period',
+        `ROAS has dropped <b>${Math.abs(trendPct).toFixed(0)}%</b> from ${avgRoasFirst.toFixed(2)}x to ${avgRoasLast.toFixed(2)}x across this period.`,
+        'Check for creative fatigue (frequency creep on Meta) and keyword competition shifts on Google.'));
+    }
+  }
+
+  // Spend volatility — flag if any day is 2x the average spend
+  const avgSpend = daily.reduce((a,d)=>a+d.spend,0) / daily.length;
+  const spikes = daily.filter(d => d.spend > avgSpend * 2);
+  if (spikes.length === 1) {
+    cards.push(insHtml('watch','Watch',`Spend Spike on ${fmtDate(spikes[0].date)}`,
+      `${fmtDate(spikes[0].date)} had <b>₹${_ind(Math.round(spikes[0].spend))}</b> — ${(spikes[0].spend/avgSpend).toFixed(1)}x the daily average of ₹${_ind(Math.round(avgSpend))}.`,
+      'Verify if this was intentional (campaign launch, budget push). If not, check for bid anomaly.'));
+  }
+
+  // High-spend low-conversion day
+  const highSpendLowConv = daily.filter(d => d.spend > avgSpend * 0.8 && d.roas > 0 && d.roas < 1.5);
+  if (highSpendLowConv.length > 0) {
+    const worst = highSpendLowConv.sort((a,b)=>b.spend-a.spend)[0];
+    cards.push(insHtml('action','Action Needed','High Spend, Low Return',
+      `<b>${fmtDate(worst.date)}</b> spent <b>₹${_ind(Math.round(worst.spend))}</b> at only <b>${worst.roas.toFixed(2)}x</b> ROAS.`,
+      'Audit campaigns active that day. Check if a new ad set or audience was auto-launched.'));
+  }
+
+  return cards;
+}
+
+function buildWeeklyInsights(meta, google) {
+  const cards = [];
+  const mW = byWeek(meta, 'meta');
+  const gW = byWeek(google, 'google');
+  if (mW.length < 2 && gW.length < 2) return [];
+
+  const allWeeks = [...new Set([...mW.map(r=>r.week), ...gW.map(r=>r.week)])].sort();
+  if (allWeeks.length < 2) return [];
+
+  const mMap = Object.fromEntries(mW.map(r=>[r.week,r]));
+  const gMap = Object.fromEntries(gW.map(r=>[r.week,r]));
+
+  // Build combined weekly rows
+  const weekly = allWeeks.map(wk => {
+    const m = mMap[wk] || {};
+    const g = gMap[wk] || {};
+    const spend = safe(m.spend) + safe(g.spend);
+    const rev   = safe(m.action_values_omni_purchase) + safe(g.conversions_value);
+    const conv  = safe(m.actions_omni_purchase) + safe(g.conversions);
+    const mRoas = safe(m.spend) > 0 ? safe(m.action_values_omni_purchase)/safe(m.spend) : 0;
+    const gRoas = safe(g.spend) > 0 ? safe(g.conversions_value)/safe(g.spend) : 0;
+    return { wk, spend, rev, conv, roas: spend > 0 ? rev/spend : 0, mRoas, gRoas };
+  }).filter(w => w.spend > 0);
+
+  if (weekly.length < 2) return [];
+
+  const latest  = weekly[weekly.length - 1];
+  const prev    = weekly[weekly.length - 2];
+
+  // WoW ROAS change
+  if (prev.roas > 0) {
+    const roasDelta = ((latest.roas - prev.roas) / prev.roas * 100);
+    if (roasDelta > 10) {
+      cards.push(insHtml('signal','Signal','ROAS Up Week-on-Week',
+        `Latest week <b>${latest.roas.toFixed(2)}x</b> vs prior week <b>${prev.roas.toFixed(2)}x</b> — <b>+${roasDelta.toFixed(0)}%</b> improvement.`,
+        'Identify which campaigns drove the uplift and lock in their settings as the new baseline.'));
+    } else if (roasDelta < -10) {
+      cards.push(insHtml('action','Action Needed','ROAS Declining Week-on-Week',
+        `Latest week <b>${latest.roas.toFixed(2)}x</b> vs prior <b>${prev.roas.toFixed(2)}x</b> — <b>${roasDelta.toFixed(0)}%</b> drop.`,
+        'Review creative fatigue metrics (Meta frequency > 2.5 is a red flag). Check Google Ads quality scores.'));
+    } else {
+      cards.push(insHtml('watch','Watch','ROAS Stable Week-on-Week',
+        `Latest week <b>${latest.roas.toFixed(2)}x</b> vs prior <b>${prev.roas.toFixed(2)}x</b> — flat performance.`,
+        'Stable can mean saturation. Consider introducing 2-3 new creatives or a fresh audience segment.'));
+    }
+  }
+
+  // WoW revenue change
+  if (prev.rev > 0) {
+    const revDelta = ((latest.rev - prev.rev) / prev.rev * 100);
+    if (Math.abs(revDelta) > 20) {
+      const dir = revDelta > 0 ? 'up' : 'down';
+      const type = revDelta > 0 ? 'signal' : 'watch';
+      const tag  = revDelta > 0 ? 'Signal' : 'Watch';
+      cards.push(insHtml(type, tag, `Revenue ${revDelta > 0 ? '▲' : '▼'} ${Math.abs(revDelta).toFixed(0)}% WoW`,
+        `Revenue moved from <b>₹${_ind(Math.round(prev.rev))}</b> to <b>₹${_ind(Math.round(latest.rev))}</b> week-on-week.`,
+        revDelta > 0
+          ? 'Sustain: maintain budget allocation and test lookalike expansion.'
+          : 'Investigate: check if spend also dropped or if CVR deteriorated independently.'));
+    }
+  }
+
+  // WoW spend efficiency — spend went up but revenue didn't follow
+  if (prev.spend > 0 && latest.spend > prev.spend * 1.15 && latest.rev < prev.rev * 1.05) {
+    cards.push(insHtml('action','Action Needed','Spend Scaled, Revenue Didn\'t Follow',
+      `Spend increased <b>${((latest.spend-prev.spend)/prev.spend*100).toFixed(0)}%</b> WoW but revenue grew only <b>${((latest.rev-prev.rev)/prev.rev*100).toFixed(0)}%</b>. Efficiency diluted.`,
+      'Marginal spend may be hitting lower-quality audiences. Pause the newest ad sets and hold budget at prior week\'s level.'));
+  }
+
+  // Platform shift — Meta losing to Google or vice versa
+  if (latest.mRoas > 0 && latest.gRoas > 0 && prev.mRoas > 0 && prev.gRoas > 0) {
+    const mShift = ((latest.mRoas - prev.mRoas) / prev.mRoas * 100);
+    const gShift = ((latest.gRoas - prev.gRoas) / prev.gRoas * 100);
+    if (gShift > 15 && mShift < 0) {
+      cards.push(insHtml('opp','Opportunity','Google Gaining Efficiency Over Meta',
+        `Google ROAS improved <b>+${gShift.toFixed(0)}%</b> WoW while Meta ROAS fell <b>${Math.abs(mShift).toFixed(0)}%</b>.`,
+        'Shift 10–15% of Meta budget to Google Search/Shopping this week and track for 5 days.'));
+    } else if (mShift > 15 && gShift < 0) {
+      cards.push(insHtml('opp','Opportunity','Meta Gaining Efficiency Over Google',
+        `Meta ROAS improved <b>+${mShift.toFixed(0)}%</b> WoW while Google ROAS fell <b>${Math.abs(gShift).toFixed(0)}%</b>.`,
+        'Shift 10% of Google budget to Meta. Ensure Meta budgets are on Campaign Budget Optimisation.'));
+    }
+  }
+
+  // Conversion volume trend
+  if (prev.conv > 0) {
+    const convDelta = ((latest.conv - prev.conv) / prev.conv * 100);
+    if (convDelta < -20) {
+      cards.push(insHtml('action','Action Needed','Conversion Volume Dropped Sharply',
+        `Orders fell <b>${Math.abs(convDelta).toFixed(0)}%</b> WoW (${Math.round(prev.conv)} → ${Math.round(latest.conv)}). Revenue impact: ₹${_ind(Math.round(prev.rev - latest.rev))}.`,
+        'Check if there were any website/checkout issues. Verify Google Ads conversion tracking is firing.'));
+    }
+  }
+
+  return cards;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN LOAD
+// ═══════════════════════════════════════════════════════════
+async function load() {
+  const from=document.getElementById('d1').value, to=document.getElementById('d2').value;
+  if(!from||!to){ alert('Please select a date range.'); return; }
+  S.from=from; S.to=to;
+
+  // Show warning if API key not configured
+  const warn=document.getElementById('apiKeyWarning');
+  if(CONFIG.WINDSOR_API_KEY==='YOUR_WINDSOR_API_KEY_HERE'){
+    warn.classList.remove('hidden'); return;
+  } else { warn.classList.add('hidden'); }
+
+  const btn=document.getElementById('refreshBtn'); btn.disabled=true;
+  const loader=document.getElementById('loader'); loader.classList.remove('hidden');
+  document.getElementById('loaderMsg').textContent='Fetching Kohler D2C data…';
+
+  try {
+    const sheetAccts = sheetAccountsForRange(from, to);
+
+    // Parallel fetch: Meta, Google, Bing (Windsor), Affiliate (Sheets)
+    const [metaAll, googAll, bingAll] = await Promise.all([
+      windsorFetch({
+        connector:'facebook', accounts:[CONFIG.META_ACCOUNT], date_from:from, date_to:to,
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','cpm','reach','frequency',
+          'actions_omni_add_to_cart','actions_omni_initiated_checkout','actions_omni_purchase','action_values_omni_purchase']
+      }),
+      windsorFetch({
+        connector:'google_ads', accounts:[CONFIG.GOOGLE_ADS_ACCOUNT], date_from:from, date_to:to,
+        fields:['date','campaign_name','spend','impressions','clicks','ctr','cpc','average_cpm',
+          'conversions','conversions_value','conversion_rate','value_per_conversion','cost_per_conversion']
+      }),
+      windsorFetch({
+        connector:'bing', accounts:[CONFIG.BING_ACCOUNT], date_from:from, date_to:to,
+        fields:['date','campaign','spend','impressions','clicks','ctr','cpc','average_cpm',
+          'conversions_qualified','revenue','conversion_rate','cost_per_conversion']
+      }),
+    ]);
+
+    // Affiliate only from Sheets (Bing now comes directly from Windsor)
+    const [affResult] = await Promise.allSettled([
+      windsorFetch({ connector:'googlesheets', accounts:sheetAccts, fields:SHEET_FIELDS_AFF }),
+    ]);
+    const affRows = affResult.status === 'fulfilled' ? affResult.value : [];
+    if (affResult.status !== 'fulfilled') console.warn('Sheet AFF fetch failed:', affResult.reason);
+
+    // Filter & store in state
+    S.meta   = metaAll.filter(r => /D2C/i.test(r.campaign_name));
+    S.google = applyConversionOverrides(
+      googAll.filter(r => !/Branding|DemandGen|Demandgen/i.test(r.campaign_name))
+    );
+    S.bing   = bingAll;
+    S.sheet  = parseSheetRows(affRows);
+
+    const bingAgg  = aggregateBing(S.bing, from, to);
+    const sheetAgg = aggregateSheet(S.sheet, from, to);
+    const combined = { bing: bingAgg, affiliate: sheetAgg.affiliate };
+
+    // Render all sections
+    renderSummary(S.meta, S.google, combined);
+    renderPanels(S.meta, S.google);
+    renderBingPanel(combined.bing);
+    renderAffPanel(combined.affiliate);
+    renderTrend(S.meta, S.google);
+    renderDailyTable(S.meta, S.google, S.sheet, S.bing);
+    renderWeekly(S.meta, S.google);
+    renderCampaigns(S.meta, S.google, S.bing);
+
+    // Insights
+    const oCards = buildOverviewInsights(S.meta, S.google, combined);
+    const dCards = buildDailyInsights(S.meta, S.google, S.sheet, from, to);
+    const wCards = buildWeeklyInsights(S.meta, S.google);
+    renderInsights('insights-overview', oCards);
+    renderInsights('insights-daily', dCards);
+    renderInsights('insights-weekly', wCards);
+
+  } catch(e) {
+    console.error('Load error:', e);
+    document.getElementById('loaderMsg').textContent = 'Error: ' + e.message;
+    alert('Error loading data: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    loader.classList.add('hidden');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+(function() {
+  const d1 = document.getElementById('d1');
+  const d2 = document.getElementById('d2');
+  d1.value = daysAgo(1);
+  d2.value = daysAgo(1);
+  // Set "Yesterday" pill active by default
+  const pills = document.querySelectorAll('.rpill');
+  pills.forEach(p => { if (p.textContent.trim() === 'Yesterday') p.classList.add('active'); });
+  load();
+})();
+</script>
+</body>
+</html>

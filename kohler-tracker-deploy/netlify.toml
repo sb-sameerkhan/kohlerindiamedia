@@ -1,0 +1,13 @@
+[build]
+  publish = "."
+
+# Serve kohler/index.html at /kohler cleanly
+[[redirects]]
+  from = "/kohler"
+  to = "/kohler/index.html"
+  status = 200
+
+# Windsor.ai proxy — routes browser calls through Netlify's servers
+# so CORS and domain allowlists don't apply
+[[redirects]]
+  from = "/api/windsor/:connector

@@ -1,0 +1,10 @@
+﻿node_modules/
+.netlify/
+.netlify_token
+netlify-token.txt
+*.zip
+.env
+# Personal data: keep raw lead/customer exports out of git
+Kohler_Citywise_*Leads*.xlsx
+Kohler_Meta_LeadGen_ScaleUp_*.xlsx
+Kohler_QL_Disposition_Mapping_*.xlsx
