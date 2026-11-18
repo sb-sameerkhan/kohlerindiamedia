@@ -1,8 +1,8 @@
 # LeadGen dashboard (kohler-leadgen-tracker.sbprism.com)
-# In Netlify: Site configuration > Build & deploy > Base directory = leadgen
-# and add the environment variable WINDSOR_API_KEY.
-# The repo holds a placeholder; the build swaps in the real key. If the variable
-# is missing the build fails, so the current live deploy stays untouched.
+# Netlify base directory = leadgen. No build step: the page calls the sb-meta
+# function, which reads SB Sources using SB_SOURCES_KEY and SB_SOURCES_MCP_URL.
 [build]
   publish = "."
-  command = "test -n \"$WINDSOR_API_KEY\" && sed -i \"s/REPLACE_WITH_WINDSOR_API_KEY/$WINDSOR_API_KEY/g\" index.html"
+
+[functions]
+  directory = "netlify/functions"

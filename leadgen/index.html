@@ -229,7 +229,6 @@ tfoot td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-in
 
 <script>
 /* ======================= CONFIG ======================= */
-const MCP="mcp__9c3f75bd-907d-43b1-9028-6be2965ddee1__get_data";
 const ACCT="1542147597124356";
 const BASE_FILTER=[["campaign","contains","leadgen"],"and",["campaign","ncontains","dealership"]];
 const ADSET_EXCLUDE=["d2c","branding","dealership","engagement","profile visits","profilevisits"];
@@ -307,47 +306,31 @@ function buildTrendConfig(labels,metrics,valueFor){
 let hasQL=Object.keys(QL_BY_MONTH).length>0;
 
 /* ======================= DATA ======================= */
-async function waitForCowork(ms=10000){
-  const start=Date.now();
-  while(!(window.cowork && typeof window.cowork.callMcpTool==="function")){
-    if(Date.now()-start>ms) throw new Error("Cowork data bridge not ready. Click Reload (top of the panel) to retry.");
-    await new Promise(r=>setTimeout(r,150));
+/* Data comes from SB Sources via a Netlify function; the key stays on the server. */
+function chunkRange(from,to){
+  var out=[], s=new Date(from+"T00:00:00Z"), e=new Date(to+"T00:00:00Z");
+  while(s<=e){ var t=new Date(s.getTime()+30*86400000); if(t>e) t=e;
+    out.push([s.toISOString().slice(0,10),t.toISOString().slice(0,10)]);
+    s=new Date(t.getTime()+86400000); }
+  return out;
+}
+async function pull(from,to){
+  var lastErr=null;
+  for(var attempt=0; attempt<3; attempt++){
+    try{
+      var res=await fetch("/.netlify/functions/sb-meta?from="+from+"&to="+to,{cache:"no-store"});
+      var j=await res.json();
+      if(!res.ok) throw new Error(j&&j.error?j.error:("SB Sources error "+res.status));
+      return Array.isArray(j.rows)?j.rows:[];
+    }catch(e){ lastErr=e; await new Promise(function(z){setTimeout(z,900);}); }
   }
+  throw lastErr;
 }
 async function call(args){
-  if(typeof window!=="undefined" && window.cowork && typeof window.cowork.callMcpTool==="function"){
-    var lastErr=null;
-    for(var a=0;a<6;a++){
-      var r=await window.cowork.callMcpTool(MCP,args);
-      if(r&&r.isError){ lastErr=new Error((r.content&&r.content[0]?r.content[0].text:"MCP error").slice(0,200)); await new Promise(function(z){setTimeout(z,900);}); continue; }
-      var payload;
-      try{ payload=r.structuredContent ?? JSON.parse(r.content[0].text); }
-      catch(e){ lastErr=new Error("Parse error: "+(r&&r.content?r.content[0].text.slice(0,160):e.message)); await new Promise(function(z){setTimeout(z,900);}); continue; }
-      var out=(payload&&payload.result)?payload.result:[];
-      if(out.length) return out;
-      await new Promise(function(z){setTimeout(z,900);});
-    }
-    if(lastErr) throw lastErr;
-    return [];
-  }
-  const WKEY="REPLACE_WITH_WINDSOR_API_KEY";
   const want=args.fields.slice();
-  const restFields=Array.from(new Set([...want,"campaign"]));
-  const u="https://connectors.windsor.ai/facebook?api_key="+WKEY+"&date_from="+encodeURIComponent(args.date_from)+"&date_to="+encodeURIComponent(args.date_to)+"&fields="+encodeURIComponent(restFields.join(","));
-  var rows=[]; var lastErr=null;
-  for(var attempt=0; attempt<6; attempt++){
-    try{
-      var res=await fetch(u+"&_r="+Date.now()+"_"+attempt,{cache:"no-store"});
-      if(!res.ok){ lastErr=new Error("Windsor error "+res.status); }
-      else{
-        var j=await res.json(); var all=j.data||j.result||[]; if(!Array.isArray(all)) all=[];
-        var kohler=all.filter(function(r){var c=r.campaign||""; return /kohler/i.test(c) && /leadgen/i.test(c) && !/dealership/i.test(c) && !/koco/i.test(c);});
-        if(kohler.length){ rows=kohler; break; }
-      }
-    }catch(e){ lastErr=e; }
-    await new Promise(function(z){setTimeout(z,900);});
-  }
-  if(!rows.length && lastErr) throw lastErr;
+  var parts=await Promise.all(chunkRange(args.date_from,args.date_to).map(function(c){return pull(c[0],c[1]);}));
+  var all=[].concat.apply([],parts);
+  var rows=all.filter(function(r){var c=r.campaign||""; return /kohler/i.test(c) && /leadgen/i.test(c) && !/dealership/i.test(c) && !/koco/i.test(c);});
   if(!want.includes("campaign")){
     var gAd=want.includes("adset_name"); var m={};
     rows.forEach(function(r){var k=(r.date||"")+"|"+(gAd?(r.adset_name||""):"");
@@ -580,7 +563,7 @@ async function load(){
   }catch(e){
     if(myId!==LOAD_ID) return;
     setStatus("stMeta","err","Meta: error");
-    document.getElementById("kpis").innerHTML=`<div class="err" style="grid-column:1/-1"><b>Could not load Meta data.</b><br/>${e.message}<br/><br/>If this mentions an account or token, reconnect the Meta Ads (facebook) connector in Windsor.ai and reload.</div>`;
+    document.getElementById("kpis").innerHTML=`<div class="err" style="grid-column:1/-1"><b>Could not load Meta data.</b><br/>${e.message}<br/><br/>If this keeps happening, check that SB Sources still has access to the Kohler India Meta ad account and reload.</div>`;
     ["dodTable","momTable"].forEach(i=>document.getElementById(i).innerHTML=`<div class="err">${e.message}</div>`);
     return;
   }
